@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hearthstone Clone Prototype</title>
+<style>
+    :root {
+        --mana-blue: #00a2ff;
+        --mana-empty: #1c3a4d;
+        --health-red: #e61919;
+        --atk-yellow: #f3d430;
+        --border-gold: #c3a05b;
+        --legendary: #ffcc00;
+        --taunt: #8d6b3d;
+        --charge: #ff7a1a;
+        --lifesteal: #7d2ee0;
+        --spell: #2e7de0;
+    }
+
+    body, html {
+        margin: 0; padding: 0; height: 100%; overflow: hidden;
+        background: #111; font-family: 'Arial', sans-serif; color: white;
+    }
+
+    #game-board {
+        width: 100vw; height: 100vh;
+        background: radial-gradient(circle, #6b4a2e 0%, #2b1a0f 100%);
+        display: flex; flex-direction: column; justify-content: space-between;
+        position: relative; border: 10px solid #332114; box-sizing: border-box;
+    }
+
+    .center-line { position: absolute; top: 50%; width: 100%; height: 2px; background: rgba(255,255,255,0.1); box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+
+    .hero-zone { height: 150px; display: flex; justify-content: center; align-items: center; position: relative; z-index: 10; }
+
+    .hero-avatar {
+        width: 100px; height: 130px; background: #444; border: 4px solid var(--border-gold);
+        border-radius: 50% 50% 10% 10%; position: relative; background-size: cover;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: box-shadow 0.3s;
+    }
+    .hero-avatar.targetable { box-shadow: 0 0 25px var(--health-red); cursor: crosshair; }
+    .hero-avatar.blocked { box-shadow: 0 0 15px #555; cursor: not-allowed; }
+
+    .hero-hp {
+        position: absolute; bottom: -10px; right: -10px; width: 40px; height: 40px;
+        background: var(--health-red); border-radius: 50%; display: flex; justify-content: center;
+        align-items: center; font-weight: bold; font-size: 1.2rem; border: 2px solid white;
+    }
+    .hero-hp.hit { animation: hitPulse 0.3s; }
+    @keyframes hitPulse { 0%{transform:scale(1)} 50%{transform:scale(1.4); background:#fff; color:#e61919} 100%{transform:scale(1)} }
+    .hero-hp.heal { animation: healPulse 0.3s; }
+    @keyframes healPulse { 0%{transform:scale(1)} 50%{transform:scale(1.4); background:#2e7d32} 100%{transform:scale(1)} }
+
+    .hero-power {
+        width: 60px; height: 60px; background: #333; border: 2px solid var(--border-gold);
+        border-radius: 50%; margin-left: 20px; display: flex; justify-content: center;
+        align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none; transition: filter 0.2s;
+    }
+    .hero-power.used { filter: grayscale(1) brightness(0.5); cursor: not-allowed; }
+    .hero-power:not(.used):hover { filter: brightness(1.3); }
+
+    .enemy-hand {
+        position: absolute; top: -58px; left: 50%; transform: translateX(-50%);
+        display: flex; justify-content: center; z-index: 5; pointer-events: none;
+    }
+    .card-back {
+        width: 46px; height: 64px; background: #631b1b; border: 2px solid var(--border-gold);
+        border-radius: 5px; background-image: repeating-linear-gradient(45deg, #4b1212, #631b1b 10px);
+        margin: 0 -10px; transform-origin: top center; transition: transform 0.3s;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.5);
+    }
+    .enemy-mana-bar { position: absolute; top: 50px; right: 50px; display: flex; gap: 5px; align-items: center; z-index: 100; }
+    .enemy-mana-bar .mana-crystal { width: 15px; height: 15px; background: var(--mana-blue); transform: rotate(45deg); box-shadow: 0 0 5px var(--mana-blue); transition: background 0.2s, box-shadow 0.2s; }
+    .enemy-mana-bar .mana-crystal.empty { background: var(--mana-empty); box-shadow: none; }
+    .enemy-mana-bar span { margin-left: 10px; color: var(--mana-blue); font-weight: bold; }
+
+    #enemy-deck {
+        position: absolute; right: 30px; top: 80px; width: 80px; height: 110px;
+        background: #3d2b1f; border: 2px solid var(--border-gold); border-radius: 5px;
+        display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
+        text-align: center; z-index: 100;
+    }
+
+    .battlefield { flex-grow: 1; display: flex; flex-direction: column; justify-content: space-around; padding: 20px; }
+
+    .minion-row { height: 130px; display: flex; justify-content: center; gap: 15px; align-items: center; border-radius: 10px; transition: background 0.3s; }
+    #player-minions.drag-over { background: rgba(255,255,255,0.08); box-shadow: inset 0 0 20px rgba(0,162,255,0.3); }
+
+    .minion-in-play {
+        width: 90px; height: 120px; background: #2c241e; border: 3px solid var(--border-gold);
+        border-radius: 50%; position: relative; animation: spawn 0.35s ease-out; cursor: pointer;
+        transition: box-shadow 0.2s, transform 0.15s; background-size: cover; background-position: center;
+    }
+    .minion-in-play.taunt { border-color: var(--taunt); border-width: 5px; }
+    .minion-in-play.can-attack { box-shadow: 0 0 12px var(--atk-yellow); }
+    .minion-in-play.exhausted { filter: brightness(0.6); cursor: not-allowed; }
+    .minion-in-play.selected { transform: translateY(-10px); box-shadow: 0 0 18px #fff; }
+    .minion-in-play.blocked-target { filter: brightness(0.5); cursor: not-allowed; }
+    @keyframes spawn { from { transform: scale(0); } to { transform: scale(1); } }
+    .minion-in-play.dying { animation: dying 0.35s forwards; pointer-events: none; }
+    @keyframes dying { to { transform: scale(0) rotate(30deg); opacity: 0; } }
+
+    .keyword-tag {
+        position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+        font-size: 8px; padding: 2px 4px; border-radius: 4px; white-space: nowrap; font-weight: bold;
+        border: 1px solid rgba(255,255,255,0.6);
+    }
+    .keyword-tag.k-taunt { background: var(--taunt); }
+    .keyword-tag.k-charge { background: var(--charge); }
+    .keyword-tag.k-lifesteal { background: var(--lifesteal); }
+
+    #end-turn {
+        position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+        width: 100px; height: 40px; background: #2e7d32; border: 3px solid #1b5e20;
+        color: #fff; font-weight: bold; cursor: pointer; box-shadow: 0 0 10px #4caf50;
+        border-radius: 5px; z-index: 100; transition: filter 0.2s;
+    }
+    #end-turn:hover { filter: brightness(1.15); }
+    #end-turn:disabled { filter: grayscale(1) brightness(0.6); cursor: not-allowed; }
+
+    .player-hand-container { height: 190px; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 10px; perspective: 1000px; z-index: 50; }
+
+    .card {
+        width: 130px; height: 180px; background: #2c241e; border: 3px solid var(--border-gold);
+        border-radius: 10px; margin: 0 -15px; position: relative; transition: all 0.25s ease;
+        cursor: grab; transform-origin: bottom center; user-select: none;
+    }
+    .card:hover { transform: translateY(-100px) scale(1.5) rotate(0deg) !important; z-index: 1000 !important; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+    .card:active { cursor: grabbing; }
+    .card.unplayable { filter: grayscale(0.6) brightness(0.55); }
+    .card.dragging { opacity: 0.35; }
+    .card.spell-card .card-art { background: linear-gradient(160deg, var(--spell), #14243d); }
+
+    .mana-cost, .atk-value, .hp-value {
+        position: absolute; width: 30px; height: 30px; border-radius: 50%;
+        display: flex; justify-content: center; align-items: center; font-weight: bold; border: 2px solid white;
+    }
+    .mana-cost { top: -5px; left: -5px; background: var(--mana-blue); }
+    .atk-value { bottom: -5px; left: -5px; background: var(--atk-yellow); color: black; }
+    .hp-value { bottom: -5px; right: -5px; background: var(--health-red); }
+    .card-art { width: 100%; height: 50%; background: #3d3d3d; border-bottom: 2px solid var(--border-gold); background-size: cover; background-position: center; }
+    .card-name { font-size: 10px; text-align: center; font-weight: bold; color: #f3d430; padding: 2px 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-text { font-size: 9px; text-align: center; padding: 2px 4px; line-height: 1.15; color: #ddd; }
+
+    .minion-in-play .atk-value, .minion-in-play .hp-value { width: 26px; height: 26px; font-size: 13px; }
+    .minion-in-play .atk-value { left: -2px; bottom: -2px; }
+    .minion-in-play .hp-value { right: -2px; bottom: -2px; }
+
+    .mana-bar { position: absolute; bottom: 20px; right: 50px; display: flex; gap: 5px; align-items: center; }
+    .mana-crystal { width: 15px; height: 15px; background: var(--mana-blue); transform: rotate(45deg); box-shadow: 0 0 5px var(--mana-blue); transition: background 0.2s, box-shadow 0.2s; }
+    .mana-crystal.empty { background: var(--mana-empty); box-shadow: none; }
+
+    @keyframes drawFromDeck {
+        0% { transform: translate(400px, -100px) scale(0.1) rotate(0deg); opacity: 0; }
+        100% { transform: translate(0,0) scale(1) rotate(var(--r)); opacity: 1; }
+    }
+    .drawing { animation: drawFromDeck 0.5s ease-out; }
+
+    #deck { position: absolute; right: 30px; bottom: 80px; width: 80px; height: 110px; background: #3d2b1f; border: 2px solid var(--border-gold); border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; text-align: center; transition: filter 0.2s; }
+    #deck:hover { filter: brightness(1.2); }
+    #deck:disabled, #deck.disabled { pointer-events: none; filter: grayscale(1) brightness(0.5); }
+
+    #log {
+        position: absolute; left: 20px; top: 20px; max-width: 230px; font-size: 12px;
+        color: #ddd; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 6px;
+        max-height: 160px; overflow-y: auto; z-index: 100;
+    }
+    #turn-indicator {
+        position: absolute; top: 15px; right: 20px;
+        font-size: 13px; letter-spacing: 1px; background: rgba(0,0,0,0.45);
+        padding: 5px 14px; border-radius: 12px; z-index: 100; border: 1px solid var(--border-gold);
+        text-align: right;
+    }
+
+    /* MARCO DE HÉROE: avatar + vida + poder agrupados como una sola unidad */
+    .hero-frame {
+        position: relative;
+        width: 150px; height: 140px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .hero-frame .hero-avatar { position: relative; z-index: 2; }
+    .hero-frame .hero-hp {
+        position: absolute; z-index: 3; bottom: -6px; left: -6px;
+        top: auto; right: auto; width: 50px; height: 50px;
+    }
+    .hero-frame .hero-power {
+        position: absolute; z-index: 3; bottom: -6px; right: -6px;
+        margin-left: 0; width: 50px; height: 50px;
+    }
+
+    #restart-btn {
+        position: absolute; bottom: 20px; left: 20px; z-index: 100; padding: 6px 12px;
+        background: #444; border: 1px solid var(--border-gold); color: #fff; border-radius: 5px;
+        cursor: pointer; font-size: 12px;
+    }
+    #restart-btn:hover { filter: brightness(1.2); }
+    #overlay-msg {
+        position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.6); z-index: 500; font-size: 3rem; font-weight: bold; letter-spacing: 2px;
+        text-shadow: 0 0 20px #000;
+    }
+    #loading-msg {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.7); z-index: 600; font-size: 1.4rem; text-align: center;
+    }
+</style>
+</head>
+<body>
+
+<div id="game-board">
+    <div id="loading-msg">Cargando mazo del jugador...</div>
+    <div class="center-line"></div>
+    <div id="turn-indicator">TU TURNO</div>
+    <div id="log"></div>
+    <button id="restart-btn" onclick="location.reload()">Reiniciar partida</button>
+    <div id="overlay-msg"></div>
+
+    <div class="hero-zone">
+        <div class="enemy-hand" id="enemy-hand"></div>
+        <div class="hero-frame">
+            <div class="hero-avatar" id="enemy-avatar" style="background-image: url('https://wow.zamimg.com/uploads/screenshots/normal/634125.jpg')"></div>
+            <div class="hero-hp" id="enemy-hp">30</div>
+            <div class="hero-power" id="enemy-power" title="Poder de héroe (rival)">2</div>
+        </div>
+    </div>
+
+    <div class="enemy-mana-bar" id="enemy-mana-bar">
+        <span id="enemy-mana-label">1/1</span>
+    </div>
+    <div id="enemy-deck">MAZO<br><span id="enemy-deck-count">30/30</span></div>
+
+    <div class="battlefield">
+        <div class="minion-row" id="enemy-minions"></div>
+        <div class="minion-row" id="player-minions" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="drop(event)"></div>
+    </div>
+
+    <button id="end-turn" onclick="endPlayerTurn()">FIN DE TURNO</button>
+
+    <div class="hero-zone">
+        <div class="hero-frame">
+            <div class="hero-avatar" id="player-avatar" style="background-image: url('https://i.pinimg.com/originals/1b/30/80/1b308007693570df7b5107e3a3930b80.png')"></div>
+            <div class="hero-hp" id="player-hp">26</div>
+            <div class="hero-power" id="player-power" title="Poder de héroe" onclick="useHeroPower()">2</div>
+        </div>
+        <div class="mana-bar" id="mana-bar">
+            <span id="mana-label" style="margin-left: 10px; color: var(--mana-blue); font-weight: bold; order: 99;">1/1</span>
+        </div>
+    </div>
+
+    <div class="player-hand-container" id="player-hand"></div>
+
+    <div id="deck" onclick="drawCard('player')">MAZO<br><span id="deck-count">30/30</span></div>
+</div>
+
+<script>
+/* =========================================================
+   CONEXIÓN CON EL BACKEND DE CARTAS
+   ========================================================= */
+const API_BASE = 'http://localhost:8000';
+const DECK_SIZE = 30;
+
+function resolveImg(path) {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return API_BASE + path;
+}
+
+// Convierte una carta tal como la devuelve el backend (schemas.CardOut)
+// al formato interno que usa este juego (el mismo que produce generateCardData()).
+function mapDbCardToGameData(dbCard) {
+    const base = {
+        name: dbCard.name,
+        image: resolveImg(dbCard.image_url),
+        flavor: dbCard.flavor_text || '',
+        legendary: !!dbCard.legendary,
+        mana: dbCard.mana_cost,
+        fromDb: true,
+    };
+
+    if (dbCard.card_type === 'spell') {
+        return {
+            ...base,
+            type: 'spell',
+            effect: dbCard.spell_effect,
+            value: dbCard.spell_value ?? 0,
+        };
+    }
+
+    return {
+        ...base,
+        type: 'minion',
+        atk: dbCard.attack ?? 0,
+        hp: dbCard.health ?? 1,
+        keyword: dbCard.keyword && dbCard.keyword !== 'none' ? dbCard.keyword : 'none',
+        battlecry: dbCard.battlecry && dbCard.battlecry !== 'none' ? dbCard.battlecry : null,
+        deathrattle: dbCard.deathrattle && dbCard.deathrattle !== 'none' ? dbCard.deathrattle : null,
+    };
+}
+
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+// Arma el mazo del jugador: primero mete las cartas reales creadas en el
+// creador de cartas, y si no llega a las DECK_SIZE, rellena con cartas de
+// prueba generadas al azar (las mismas que ya usaba el bot rival).
+async function loadPlayerDeck() {
+    let dbCards = [];
+    try {
+        const res = await fetch(`${API_BASE}/cards/`);
+        if (res.ok) dbCards = await res.json();
+        else console.warn('El backend respondió con error al pedir /cards/');
+    } catch (err) {
+        console.warn('No se pudo conectar con el backend de cartas (¿está corriendo en :8000?). Se usará un mazo 100% de prueba.', err);
+    }
+
+    const deck = dbCards.slice(0, DECK_SIZE).map(mapDbCardToGameData);
+    while (deck.length < DECK_SIZE) {
+        deck.push(generateCardData());
+    }
+
+    state.player.deckCards = shuffle(deck);
+    log(`Mazo armado: ${dbCards.length} carta(s) real(es) + ${DECK_SIZE - Math.min(dbCards.length, DECK_SIZE)} de prueba.`);
+}
+
+/* =========================================================
+   ESTADO GLOBAL
+   ========================================================= */
+const state = {
+    turn: 1,
+    activePlayer: 'player', // 'player' | 'enemy'
+    gameOver: false,
+    selectedAttacker: null, // id de esbirro propio seleccionado para atacar
+
+    player: { maxMana: 1, mana: 1, deck: 30, hp: 26, heroPowerUsed: false, minionCount: 0, handCount: 0, deckCards: [] },
+    enemy:  { maxMana: 1, mana: 1, deck: 30, hp: 30, heroPowerUsed: false, minionCount: 0, handCount: 0, hand: [] } // enemy.hand guarda los datos reales de sus cartas
+};
+
+function log(msg) {
+    const el = document.getElementById('log');
+    const line = document.createElement('div');
+    line.textContent = msg;
+    el.prepend(line);
+    while (el.children.length > 7) el.removeChild(el.lastChild);
+}
+
+function showOverlay(text) {
+    const ov = document.getElementById('overlay-msg');
+    ov.textContent = text;
+    ov.style.display = 'flex';
+}
+
+/* =========================================================
+   GENERACIÓN DE CARTAS DE PRUEBA (rellenan lo que falte del mazo)
+   ========================================================= */
+const KEYWORDS = ['none', 'none', 'none', 'taunt', 'charge', 'lifesteal']; // pesos simples
+const BATTLECRIES = [null, null, null, 'damage_enemy_hero'];
+const DEATHRATTLES = [null, null, null, 'draw_card'];
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function generateCardData() {
+    const isSpell = Math.random() < 0.25;
+    const mana = Math.floor(Math.random() * 6) + 1;
+
+    if (isSpell) {
+        const effects = ['damage_enemy_hero', 'heal_hero', 'draw_two', 'damage_enemy_minion'];
+        const effect = pick(effects);
+        let value = 0;
+        if (effect === 'damage_enemy_hero' || effect === 'damage_enemy_minion') value = Math.max(1, Math.floor(mana * 0.8));
+        if (effect === 'heal_hero') value = mana + 2;
+        return { type: 'spell', mana, effect, value, legendary: false, name: 'Hechizo de prueba' };
+    }
+
+    const atk = Math.floor(Math.random() * mana);
+    const hp = Math.max(1, mana - atk + (Math.random() > 0.5 ? 1 : -1));
+    const keyword = pick(KEYWORDS);
+    const battlecry = pick(BATTLECRIES);
+    const deathrattle = pick(DEATHRATTLES);
+    const legendary = Math.random() > 0.85;
+
+    return { type: 'minion', mana, atk, hp, keyword, battlecry, deathrattle, legendary, name: 'Esbirro de prueba' };
+}
+
+function spellText(effect, value) {
+    switch (effect) {
+        case 'damage_enemy_hero': return `Inflige ${value} de daño al héroe enemigo.`;
+        case 'heal_hero': return `Restaura ${value} de vida a tu héroe.`;
+        case 'draw_two': return `Roba 2 cartas.`;
+        case 'damage_enemy_minion': return `Inflige ${value} de daño a un esbirro enemigo al azar.`;
+    }
+    return '';
+}
+
+function keywordLabel(k) {
+    if (k === 'taunt') return 'PROVOCAR';
+    if (k === 'charge') return 'CARGA';
+    if (k === 'lifesteal') return 'VIDA ROBADA';
+    return '';
+}
+
+/* =========================================================
+   MANÁ / UI
+   ========================================================= */
+function renderManaBar() {
+    const bar = document.getElementById('mana-bar');
+    bar.querySelectorAll('.mana-crystal').forEach(c => c.remove());
+    for (let i = 0; i < state.player.maxMana; i++) {
+        const crystal = document.createElement('div');
+        crystal.className = 'mana-crystal' + (i < state.player.mana ? '' : ' empty');
+        bar.insertBefore(crystal, document.getElementById('mana-label'));
+    }
+    document.getElementById('mana-label').innerText = `${state.player.mana}/${state.player.maxMana}`;
+
+    const enemyBar = document.getElementById('enemy-mana-bar');
+    enemyBar.querySelectorAll('.mana-crystal').forEach(c => c.remove());
+    for (let i = 0; i < state.enemy.maxMana; i++) {
+        const crystal = document.createElement('div');
+        crystal.className = 'mana-crystal' + (i < state.enemy.mana ? '' : ' empty');
+        enemyBar.insertBefore(crystal, document.getElementById('enemy-mana-label'));
+    }
+    document.getElementById('enemy-mana-label').innerText = `${state.enemy.mana}/${state.enemy.maxMana}`;
+    refreshPlayability();
+}
+
+function refreshPlayability() {
+    const canPlay = state.activePlayer === 'player' && !state.gameOver;
+    document.querySelectorAll('#player-hand .card').forEach(card => {
+        const cost = parseInt(card.dataset.mana);
+        card.classList.toggle('unplayable', !canPlay || cost > state.player.mana);
+        card.draggable = canPlay && cost <= state.player.mana;
+    });
+    document.getElementById('deck').classList.toggle('disabled', !canPlay || state.player.handCountFull());
+}
+state.player.handCountFull = () => state.player.handCount >= 10;
+
+/* =========================================================
+   ROBAR CARTAS
+   ========================================================= */
+function refreshEnemyHandFan() {
+    const cards = Array.from(document.getElementById('enemy-hand').children);
+    const n = cards.length;
+    cards.forEach((back, i) => {
+        const rot = (i - (n - 1) / 2) * -8;
+        back.style.transform = `rotate(${rot}deg) translateY(${-Math.abs(rot) * 0.8}px)`;
+    });
+}
+
+function drawCard(side) {
+    const p = state[side];
+    if (p.handCount >= 10) { log(side === 'player' ? 'Tu mano está llena.' : 'La mano del rival está llena.'); return; }
+    if (p.deck <= 0) { log(side === 'player' ? '¡Tu mazo está vacío!' : 'El mazo rival está vacío.'); return; }
+
+    p.deck--;
+    if (side === 'player') document.getElementById('deck-count').innerText = `${p.deck}/30`;
+    else document.getElementById('enemy-deck-count').innerText = `${p.deck}/30`;
+    p.handCount++;
+
+    // El jugador roba de su mazo real (armado con las cartas de la base de
+    // datos + relleno de prueba); el rival sigue generando cartas al azar.
+    const data = side === 'player' ? (state.player.deckCards.shift() || generateCardData()) : generateCardData();
+
+    if (side === 'enemy') {
+        data.id = 'ecard-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        state.enemy.hand.push(data);
+        const handEl = document.getElementById('enemy-hand');
+        const back = document.createElement('div');
+        back.className = 'card-back';
+        back.id = 'back-' + data.id;
+        handEl.appendChild(back);
+        refreshEnemyHandFan();
+        return;
+    }
+
+    const hand = document.getElementById('player-hand');
+    const card = document.createElement('div');
+    card.id = 'card-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    card.className = 'card drawing' + (data.type === 'spell' ? ' spell-card' : '');
+    card.dataset.mana = data.mana;
+    card.dataset.type = data.type;
+    card.dataset.name = data.name || '';
+    card.dataset.image = data.image || '';
+
+    if (data.type === 'minion') {
+        card.dataset.atk = data.atk;
+        card.dataset.hp = data.hp;
+        card.dataset.keyword = data.keyword;
+        card.dataset.battlecry = data.battlecry || '';
+        card.dataset.deathrattle = data.deathrattle || '';
+        if (data.legendary) { card.style.borderColor = 'var(--legendary)'; card.dataset.legendary = '1'; }
+
+        const kwTag = data.keyword !== 'none' ? `<div class="keyword-tag k-${data.keyword}">${keywordLabel(data.keyword)}</div>` : '';
+        const artStyle = data.image ? ` style="background-image: url('${data.image}')"` : '';
+        card.innerHTML = `
+            <div class="mana-cost">${data.mana}</div>
+            ${kwTag}
+            <div class="card-art"${artStyle}></div>
+            <div class="card-name">${data.name || (data.legendary ? 'LEGENDARIA' : 'Esbirro')}</div>
+            <div class="card-text">${data.battlecry ? 'Grito de guerra' : ''}${data.battlecry && data.deathrattle ? ' · ' : ''}${data.deathrattle ? 'Estertor' : ''}</div>
+            <div class="atk-value">${data.atk}</div>
+            <div class="hp-value">${data.hp}</div>
+        `;
+    } else {
+        card.dataset.effect = data.effect;
+        card.dataset.value = data.value;
+        const artStyle = data.image ? ` style="background-image: url('${data.image}')"` : '';
+        card.innerHTML = `
+            <div class="mana-cost">${data.mana}</div>
+            <div class="card-art"${artStyle}></div>
+            <div class="card-name">${data.name || 'Hechizo'}</div>
+            <div class="card-text">${spellText(data.effect, data.value)}</div>
+        `;
+    }
+
+    const rot = (state.player.handCount - 3) * 6;
+    card.style.setProperty('--r', `${rot}deg`);
+    card.style.transform = `rotate(${rot}deg)`;
+
+    card.ondragstart = (e) => { e.dataTransfer.setData('text', card.id); card.classList.add('dragging'); };
+    card.ondragend = () => card.classList.remove('dragging');
+
+    hand.appendChild(card);
+    setTimeout(() => card.classList.remove('drawing'), 500);
+    refreshPlayability();
+}
+
+/* =========================================================
+   JUGAR CARTAS (DRAG & DROP - JUGADOR)
+   ========================================================= */
+function allowDrop(e) { e.preventDefault(); if (state.activePlayer === 'player') document.getElementById('player-minions').classList.add('drag-over'); }
+function dragLeave() { document.getElementById('player-minions').classList.remove('drag-over'); }
+
+function drop(e) {
+    e.preventDefault();
+    document.getElementById('player-minions').classList.remove('drag-over');
+    if (state.activePlayer !== 'player' || state.gameOver) return;
+
+    const cardId = e.dataTransfer.getData('text');
+    const cardElement = document.getElementById(cardId);
+    if (!cardElement) return;
+
+    playCardFromElement(cardElement, 'player');
+}
+
+function playCardFromElement(cardElement, side) {
+    const p = state[side];
+    const manaCost = parseInt(cardElement.dataset.mana);
+    if (p.mana < manaCost) { log('¡No tienes suficiente maná!'); return false; }
+
+    if (cardElement.dataset.type === 'spell') {
+        if (p.mana < manaCost) return false;
+        p.mana -= manaCost;
+        castSpell(cardElement.dataset.effect, parseInt(cardElement.dataset.value), side);
+        p.handCount--;
+        cardElement.remove();
+        renderManaBar();
+        return true;
+    }
+
+    // Esbirro
+    if (p.minionCount >= 7) { log('El campo está lleno (máximo 7).'); return false; }
+    p.mana -= manaCost;
+    p.minionCount++;
+    p.handCount--;
+
+    const battlefieldId = side === 'player' ? 'player-minions' : 'enemy-minions';
+    const battlefield = document.getElementById(battlefieldId);
+
+    const keyword = cardElement.dataset.keyword || 'none';
+    const charge = keyword === 'charge';
+
+    const minion = document.createElement('div');
+    minion.className = 'minion-in-play' + (charge ? '' : ' exhausted') + (keyword === 'taunt' ? ' taunt' : '');
+    minion.id = side + '-minion-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    minion.dataset.side = side;
+    minion.dataset.atk = cardElement.dataset.atk;
+    minion.dataset.hp = cardElement.dataset.hp;
+    minion.dataset.maxhp = cardElement.dataset.hp;
+    minion.dataset.keyword = keyword;
+    minion.dataset.deathrattle = cardElement.dataset.deathrattle || '';
+
+    if (cardElement.dataset.image) minion.style.backgroundImage = `url('${cardElement.dataset.image}')`;
+
+    const kwTag = keyword !== 'none' ? `<div class="keyword-tag k-${keyword}">${keywordLabel(keyword)}</div>` : '';
+    minion.innerHTML = `${kwTag}<div class="atk-value">${cardElement.dataset.atk}</div><div class="hp-value">${cardElement.dataset.hp}</div>`;
+
+    if (side === 'player') minion.onclick = () => onPlayerMinionClick(minion);
+    else minion.onclick = () => onEnemyMinionClick(minion);
+
+    battlefield.appendChild(minion);
+
+    const battlecry = cardElement.dataset.battlecry;
+    if (battlecry === 'damage_enemy_hero') {
+        dealDamageToHero(side === 'player' ? 'enemy' : 'player', 1);
+        log(`${side === 'player' ? 'Tu' : 'El'} esbirro activa su grito de guerra: 1 de daño.`);
+    }
+
+    cardElement.remove();
+    log(`${side === 'player' ? 'Invocaste' : 'El rival invoca'} ${cardElement.dataset.name ? `"${cardElement.dataset.name}"` : 'un esbirro'} ${minion.dataset.atk}/${minion.dataset.hp}${keyword !== 'none' ? ' (' + keywordLabel(keyword) + ')' : ''}.`);
+    renderManaBar();
+    return true;
+}
+
+function castSpell(effect, value, side) {
+    const enemySide = side === 'player' ? 'enemy' : 'player';
+    switch (effect) {
+        case 'damage_enemy_hero':
+            dealDamageToHero(enemySide, value);
+            log(`${side === 'player' ? 'Lanzaste' : 'El rival lanza'} un hechizo: ${value} de daño directo.`);
+            break;
+        case 'heal_hero':
+            healHero(side, value);
+            log(`${side === 'player' ? 'Te curaste' : 'El rival se cura'} ${value} de vida.`);
+            break;
+        case 'draw_two':
+            drawCard(side); drawCard(side);
+            log(`${side === 'player' ? 'Robaste' : 'El rival roba'} 2 cartas.`);
+            break;
+        case 'damage_enemy_minion': {
+            const row = document.getElementById(enemySide + '-minions');
+            const minions = Array.from(row.children);
+            if (minions.length === 0) { log('No había esbirros enemigos para el hechizo.'); break; }
+            const target = pick(minions);
+            damageMinion(target, value);
+            log(`${side === 'player' ? 'Tu' : 'El'} hechizo golpea un esbirro enemigo por ${value}.`);
+            break;
+        }
+    }
+}
+
+/* =========================================================
+   DAÑO / CURACIÓN / MUERTE
+   ========================================================= */
+function dealDamageToHero(side, amount) {
+    if (state.gameOver) return;
+    state[side].hp = Math.max(0, state[side].hp - amount);
+    const hpEl = document.getElementById(side + '-hp');
+    hpEl.innerText = state[side].hp;
+    hpEl.classList.add('hit');
+    setTimeout(() => hpEl.classList.remove('hit'), 300);
+    checkWinLose();
+}
+
+function healHero(side, amount) {
+    const cap = side === 'player' ? 30 : 30;
+    state[side].hp = Math.min(cap, state[side].hp + amount);
+    const hpEl = document.getElementById(side + '-hp');
+    hpEl.innerText = state[side].hp;
+    hpEl.classList.add('heal');
+    setTimeout(() => hpEl.classList.remove('heal'), 300);
+}
+
+function damageMinion(minionEl, amount) {
+    const newHp = parseInt(minionEl.dataset.hp) - amount;
+    minionEl.dataset.hp = newHp;
+    minionEl.querySelector('.hp-value').innerText = newHp;
+    if (newHp <= 0) killMinion(minionEl);
+}
+
+function killMinion(minionEl) {
+    const side = minionEl.dataset.side;
+    const deathrattle = minionEl.dataset.deathrattle;
+    minionEl.classList.add('dying');
+    state[side].minionCount--;
+    if (deathrattle === 'draw_card') {
+        drawCard(side);
+        log(`${side === 'player' ? 'Tu' : 'El'} esbirro caído activa su estertor: robas una carta.`);
+    }
+    if (state.selectedAttacker === minionEl.id) clearSelection();
+    setTimeout(() => minionEl.remove(), 350);
+}
+
+/* =========================================================
+   COMBATE
+   ========================================================= */
+function onPlayerMinionClick(minion) {
+    if (state.activePlayer !== 'player' || state.gameOver) return;
+    if (minion.classList.contains('exhausted')) { log('Ese esbirro tiene fatiga de invocación.'); return; }
+
+    if (state.selectedAttacker === minion.id) { clearSelection(); return; }
+    clearSelection();
+    state.selectedAttacker = minion.id;
+    minion.classList.add('selected');
+    highlightTargets(true);
+}
+
+function enemyHasTaunt() {
+    return Array.from(document.getElementById('enemy-minions').children).some(m => m.dataset.keyword === 'taunt');
+}
+
+function highlightTargets(on) {
+    const tauntActive = on && enemyHasTaunt();
+    const enemyAvatar = document.getElementById('enemy-avatar');
+    enemyAvatar.classList.toggle('targetable', on && !tauntActive);
+    enemyAvatar.classList.toggle('blocked', on && tauntActive);
+
+    Array.from(document.getElementById('enemy-minions').children).forEach(m => {
+        const isTaunt = m.dataset.keyword === 'taunt';
+        m.classList.toggle('can-attack', on && (!tauntActive || isTaunt));
+        m.classList.toggle('blocked-target', on && tauntActive && !isTaunt);
+    });
+}
+
+function clearSelection() {
+    if (state.selectedAttacker) {
+        const prev = document.getElementById(state.selectedAttacker);
+        if (prev) prev.classList.remove('selected');
+    }
+    state.selectedAttacker = null;
+    highlightTargets(false);
+}
+
+function onEnemyMinionClick(target) {
+    if (!state.selectedAttacker || state.activePlayer !== 'player') return;
+    if (enemyHasTaunt() && target.dataset.keyword !== 'taunt') { log('¡Debes atacar a un esbirro con Provocar primero!'); return; }
+    const attacker = document.getElementById(state.selectedAttacker);
+    if (!attacker) return;
+    resolveMinionCombat(attacker, target);
+    clearSelection();
+}
+
+document.getElementById('enemy-avatar').addEventListener('click', () => {
+    if (!state.selectedAttacker || state.activePlayer !== 'player' || state.gameOver) return;
+    if (enemyHasTaunt()) { log('¡Debes atacar a un esbirro con Provocar primero!'); return; }
+    const attacker = document.getElementById(state.selectedAttacker);
+    if (!attacker) return;
+    resolveHeroAttack(attacker, 'enemy');
+    clearSelection();
+});
+
+function resolveHeroAttack(attackerEl, targetSide) {
+    const dmg = parseInt(attackerEl.dataset.atk);
+    dealDamageToHero(targetSide, dmg);
+    if (attackerEl.dataset.keyword === 'lifesteal') healHero(attackerEl.dataset.side, dmg);
+    attackerEl.classList.add('exhausted');
+    log(`${attackerEl.dataset.side === 'player' ? 'Atacaste' : 'El rival ataca'} al héroe ${targetSide === 'player' ? 'propio' : 'rival'} por ${dmg}.`);
+}
+
+function resolveMinionCombat(attackerEl, defenderEl) {
+    const atkDmg = parseInt(attackerEl.dataset.atk);
+    const defDmg = parseInt(defenderEl.dataset.atk);
+
+    damageMinion(defenderEl, atkDmg);
+    if (document.body.contains(attackerEl) && !attackerEl.classList.contains('dying')) {
+        damageMinion(attackerEl, defDmg);
+    }
+    if (attackerEl.dataset.keyword === 'lifesteal') healHero(attackerEl.dataset.side, atkDmg);
+    if (defenderEl.dataset.keyword === 'lifesteal' && document.body.contains(defenderEl)) healHero(defenderEl.dataset.side, defDmg);
+
+    attackerEl.classList.add('exhausted');
+    log(`Combate de esbirros: ${atkDmg} vs ${defDmg} de daño intercambiado.`);
+}
+
+function checkWinLose() {
+    if (state.gameOver) return;
+    if (state.enemy.hp <= 0) { state.gameOver = true; showOverlay('¡GANASTE! 🎉'); log('¡Victoria!'); disableAll(); }
+    else if (state.player.hp <= 0) { state.gameOver = true; showOverlay('DERROTA'); log('Has sido derrotado...'); disableAll(); }
+}
+
+function disableAll() {
+    document.getElementById('end-turn').disabled = true;
+    document.querySelectorAll('.card, .minion-in-play, #deck').forEach(el => el.style.pointerEvents = 'none');
+    highlightTargets(false);
+}
+
+/* =========================================================
+   PODER DE HÉROE (JUGADOR)
+   ========================================================= */
+function useHeroPower() {
+    if (state.activePlayer !== 'player' || state.gameOver) return;
+    const btn = document.getElementById('player-power');
+    if (state.player.heroPowerUsed) { log('Ya usaste tu poder de héroe este turno.'); return; }
+    if (state.player.mana < 2) { log('Necesitas 2 de maná para tu poder de héroe.'); return; }
+    state.player.mana -= 2;
+    state.player.heroPowerUsed = true;
+    btn.classList.add('used');
+    dealDamageToHero('enemy', 2); // poder de héroe simple: 2 de daño directo
+    renderManaBar();
+    log('Usaste tu poder de héroe: 2 de daño al rival.');
+}
+
+/* =========================================================
+   TURNOS
+   ========================================================= */
+function startPlayerTurn() {
+    if (state.gameOver) return;
+    state.activePlayer = 'player';
+    state.turn++;
+    state.player.maxMana = Math.min(10, state.player.maxMana + 1);
+    state.player.mana = state.player.maxMana;
+    state.player.heroPowerUsed = false;
+    document.getElementById('player-power').classList.remove('used');
+    document.querySelectorAll('#player-minions .minion-in-play').forEach(m => m.classList.remove('exhausted'));
+    renderManaBar();
+    drawCard('player');
+    document.getElementById('turn-indicator').innerText = `TURNO ${state.turn} - TU TURNO`;
+    document.getElementById('end-turn').disabled = false;
+    log(`--- Turno ${state.turn}: tu turno ---`);
+}
+
+function endPlayerTurn() {
+    if (state.activePlayer !== 'player' || state.gameOver) return;
+    clearSelection();
+    document.getElementById('end-turn').disabled = true;
+    state.activePlayer = 'enemy';
+    document.getElementById('turn-indicator').innerText = `TURNO ${state.turn} - RIVAL PENSANDO...`;
+    renderManaBar();
+    setTimeout(runEnemyTurn, 700);
+}
+
+/* =========================================================
+   IA DEL RIVAL (BOT CON REGLAS, SIN LLAMADAS EXTERNAS)
+   ========================================================= */
+function runEnemyTurn() {
+    if (state.gameOver) return;
+    state.enemy.maxMana = Math.min(10, state.enemy.maxMana + 1);
+    state.enemy.mana = state.enemy.maxMana;
+    state.enemy.heroPowerUsed = false;
+    document.querySelectorAll('#enemy-minions .minion-in-play').forEach(m => m.classList.remove('exhausted'));
+    drawCard('enemy');
+    renderManaBar();
+    log(`--- Turno ${state.turn}: turno del rival ---`);
+
+    aiPlayCards();
+    setTimeout(() => {
+        aiUseHeroPowerMaybe();
+        setTimeout(() => {
+            aiAttackPhase();
+            setTimeout(() => {
+                if (!state.gameOver) startPlayerTurn();
+            }, 500);
+        }, 500);
+    }, 500);
+}
+
+function aiPlayCards() {
+    // Juega cartas de mayor a menor coste mientras pueda pagarlas y tenga espacio/mano
+    state.enemy.hand.sort((a, b) => b.mana - a.mana);
+    let playedSomething = true;
+    while (playedSomething) {
+        playedSomething = false;
+        for (let i = 0; i < state.enemy.hand.length; i++) {
+            const data = state.enemy.hand[i];
+            if (data.mana > state.enemy.mana) continue;
+            if (data.type === 'minion' && state.enemy.minionCount >= 7) continue;
+
+            // Construir un elemento de carta temporal para reutilizar playCardFromElement
+            const tempCard = buildTempCardElement(data);
+            const success = playCardFromElement(tempCard, 'enemy');
+            if (success) {
+                state.enemy.hand.splice(i, 1);
+                const backEl = document.getElementById('back-' + data.id);
+                if (backEl) backEl.remove();
+                refreshEnemyHandFan();
+                playedSomething = true;
+                break;
+            }
+        }
+    }
+}
+
+function buildTempCardElement(data) {
+    const el = document.createElement('div');
+    el.dataset.mana = data.mana;
+    el.dataset.type = data.type;
+    if (data.type === 'minion') {
+        el.dataset.atk = data.atk;
+        el.dataset.hp = data.hp;
+        el.dataset.keyword = data.keyword;
+        el.dataset.battlecry = data.battlecry || '';
+        el.dataset.deathrattle = data.deathrattle || '';
+    } else {
+        el.dataset.effect = data.effect;
+        el.dataset.value = data.value;
+    }
+    return el;
+}
+
+function aiUseHeroPowerMaybe() {
+    if (state.gameOver) return;
+    if (state.enemy.heroPowerUsed || state.enemy.mana < 2) return;
+    // Heurística simple: usarlo si le queda maná de sobra tras jugar cartas
+    if (state.enemy.mana >= 2) {
+        state.enemy.mana -= 2;
+        state.enemy.heroPowerUsed = true;
+        dealDamageToHero('player', 2);
+        renderManaBar();
+        log('El rival usa su poder de héroe: 2 de daño.');
+    }
+}
+
+function aiAttackPhase() {
+    if (state.gameOver) return;
+    const attackers = Array.from(document.getElementById('enemy-minions').children).filter(m => !m.classList.contains('exhausted'));
+    const playerTaunts = Array.from(document.getElementById('player-minions').children).filter(m => m.dataset.keyword === 'taunt');
+
+    attackers.forEach(attacker => {
+        if (!document.body.contains(attacker) || state.gameOver) return;
+        const playerMinions = Array.from(document.getElementById('player-minions').children);
+
+        if (playerTaunts.length > 0) {
+            // Debe atacar Provocar: elige el de menor vida para asegurarse el trade
+            const target = playerTaunts.reduce((a, b) => parseInt(a.dataset.hp) < parseInt(b.dataset.hp) ? a : b);
+            resolveMinionCombat(attacker, target);
+            return;
+        }
+
+        // Busca un trade favorable: puede matar al objetivo sin morir él
+        const atk = parseInt(attacker.dataset.atk);
+        const hp = parseInt(attacker.dataset.hp);
+        const favorable = playerMinions.find(m => parseInt(m.dataset.hp) <= atk && parseInt(m.dataset.atk) < hp);
+        if (favorable) {
+            resolveMinionCombat(attacker, favorable);
+            return;
+        }
+
+        // Si no hay trade favorable, ataca directo al héroe
+        resolveHeroAttack(attacker, 'player');
+    });
+}
+
+/* =========================================================
+   INICIO DE PARTIDA
+   ========================================================= */
+(async function init() {
+    renderManaBar();
+    document.getElementById('end-turn').disabled = false;
+
+    await loadPlayerDeck();
+    document.getElementById('loading-msg').style.display = 'none';
+
+    for (let i = 0; i < 3; i++) setTimeout(() => drawCard('player'), i * 200);
+    for (let i = 0; i < 3; i++) setTimeout(() => drawCard('enemy'), i * 200);
+    log('¡Comienza la partida! Turno 1 - tu turno.');
+})();
+</script>
+</body>
+</html>

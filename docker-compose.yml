@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cartas_user
+      POSTGRES_PASSWORD: cartas_pass
+      POSTGRES_DB: cartas_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - cartas_pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://cartas_user:cartas_pass@db:5432/cartas_db
+    ports:
+      - "8000:8000"
+    volumes:
+      - cartas_uploads:/app/app/static/uploads
+    depends_on:
+      - db
+
+volumes:
+  cartas_pgdata:
+  cartas_uploads:
