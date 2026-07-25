@@ -2,7 +2,7 @@ import enum
 import uuid
 
 from sqlalchemy import Column, String, Integer, Boolean, Enum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from .database import Base
 
@@ -19,6 +19,12 @@ class Keyword(str, enum.Enum):
     lifesteal = "lifesteal"
 
 
+# --- Campos "legacy" ---
+# Se mantienen por compatibilidad con cartas ya creadas y con el formulario
+# simple del frontend (checkboxes). El motor del juego (game.html) ya NO
+# los usa como fuente de verdad: los convierte a `abilities` al vuelo si
+# `abilities` viene vacío (ver `legacyToAbilities()` en game.html).
+# Para cartas nuevas, lo recomendado es escribir directamente `abilities`.
 class Battlecry(str, enum.Enum):
     none = "none"
     damage_enemy_hero = "damage_enemy_hero"
@@ -45,12 +51,33 @@ class Card(Base):
     card_type = Column(Enum(CardType), nullable=False, default=CardType.minion)
     legendary = Column(Boolean, default=False)
 
+    # --- Identidad temática (solo para esbirros/personajes) ---
+    origin = Column(String, nullable=True)                 # ej: "One Piece"
+    archetypes = Column(JSONB, nullable=False, default=list, server_default="[]")     # ej: ["espadachin"]
+    associations = Column(JSONB, nullable=False, default=list, server_default="[]")   # ej: ["mugiwaras"]
+
     # Solo aplica a esbirros (nullable para hechizos)
     attack = Column(Integer, nullable=True)
     health = Column(Integer, nullable=True)
     keyword = Column(Enum(Keyword), default=Keyword.none)
+
+    # Campos legacy (ver comentario arriba). Se mantienen para no romper
+    # cartas viejas ni el formulario simple del CardForm.
     battlecry = Column(Enum(Battlecry), default=Battlecry.none)
     deathrattle = Column(Enum(Deathrattle), default=Deathrattle.none)
+
+    # --- Sistema de habilidades declarativo (Event Bus) ---
+    # Lista de objetos { trigger, effect, params } tal como se describe en
+    # arquitectura_habilidades_cartas.txt. Ejemplo:
+    #   [
+    #     {"trigger": "ON_ENTER", "effect": "DEAL_DAMAGE",
+    #      "params": {"amount": 1, "target": "ENEMY_HERO"}},
+    #     {"trigger": "ON_DEATH", "effect": "DRAW_CARD",
+    #      "params": {"amount": 1, "player": "OWNER"}}
+    #   ]
+    # Si queda vacío, el frontend reconstruye una lista equivalente a partir
+    # de battlecry/deathrattle (compatibilidad con cartas viejas).
+    abilities = Column(JSONB, nullable=False, default=list, server_default="[]")
 
     # Solo aplica a hechizos (nullable para esbirros)
     spell_effect = Column(Enum(SpellEffect), nullable=True)

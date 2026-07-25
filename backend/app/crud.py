@@ -38,3 +38,16 @@ def delete_card(db: Session, card_id: uuid.UUID):
     db.delete(db_card)
     db.commit()
     return db_card
+
+def get_distinct_origins(db: Session):
+    rows = db.query(models.Card.origin).filter(models.Card.origin.isnot(None)).distinct().all()
+    return sorted({r[0] for r in rows if r[0]})
+
+
+def get_distinct_tags(db: Session, column):
+    rows = db.query(column).all()
+    tags: set[str] = set()
+    for (arr,) in rows:
+        if arr:
+            tags.update(arr)
+    return sorted(tags)

@@ -119,37 +119,102 @@
     #end-turn:hover { filter: brightness(1.15); }
     #end-turn:disabled { filter: grayscale(1) brightness(0.6); cursor: not-allowed; }
 
-    .player-hand-container { height: 190px; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 10px; perspective: 1000px; z-index: 50; }
+    /* ===== Reemplaza TODO este bloque (desde ".player-hand-container" hasta
+   ".minion-in-play .hp-value") por lo siguiente ===== */
 
-    .card {
-        width: 130px; height: 180px; background: #2c241e; border: 3px solid var(--border-gold);
-        border-radius: 10px; margin: 0 -15px; position: relative; transition: all 0.25s ease;
-        cursor: grab; transform-origin: bottom center; user-select: none;
-    }
-    .card:hover { transform: translateY(-100px) scale(1.5) rotate(0deg) !important; z-index: 1000 !important; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
-    .card:active { cursor: grabbing; }
-    .card.unplayable { filter: grayscale(0.6) brightness(0.55); }
-    .card.dragging { opacity: 0.35; }
-    .card.spell-card .card-art { background: linear-gradient(160deg, var(--spell), #14243d); }
+.player-hand-container {
+    height: 190px; display: flex; justify-content: center; align-items: flex-end;
+    padding-bottom: 10px; perspective: 1000px; z-index: 50;
+}
 
-    .mana-cost, .atk-value, .hp-value {
-        position: absolute; width: 30px; height: 30px; border-radius: 50%;
-        display: flex; justify-content: center; align-items: center; font-weight: bold; border: 2px solid white;
-    }
-    .mana-cost { top: -5px; left: -5px; background: var(--mana-blue); }
-    .atk-value { bottom: -5px; left: -5px; background: var(--atk-yellow); color: black; }
-    .hp-value { bottom: -5px; right: -5px; background: var(--health-red); }
-    .card-art { width: 100%; height: 50%; background: #3d3d3d; border-bottom: 2px solid var(--border-gold); background-size: cover; background-position: center; }
-    .card-name { font-size: 10px; text-align: center; font-weight: bold; color: #f3d430; padding: 2px 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card-text { font-size: 9px; text-align: center; padding: 2px 4px; line-height: 1.15; color: #ddd; }
+.card {
+    width: 130px; height: 180px; background: #2c241e; border: 3px solid var(--border-gold);
+    border-radius: 10px; margin: 0 -15px; position: relative; transition: all 0.25s ease;
+    cursor: grab; transform-origin: bottom center; user-select: none; overflow: visible;
+}
+.card:hover { transform: translateY(-110px) scale(1.7) !important; z-index: 1000 !important; box-shadow: 0 14px 34px rgba(0,0,0,0.8); }
+.card:active { cursor: grabbing; }
+.card.unplayable { filter: grayscale(0.6) brightness(0.55); }
+.card.dragging { opacity: 0.35; }
 
-    .minion-in-play .atk-value, .minion-in-play .hp-value { width: 26px; height: 26px; font-size: 13px; }
-    .minion-in-play .atk-value { left: -2px; bottom: -2px; }
-    .minion-in-play .hp-value { right: -2px; bottom: -2px; }
+/* La imagen ahora ocupa TODA la carta, no el 50% */
+.card-art {
+    position: absolute; inset: 0; border-radius: 7px;
+    background: #3d3d3d; background-size: cover; background-position: center;
+}
+.card.spell-card .card-art { background: linear-gradient(160deg, var(--spell), #14243d); }
 
-    .mana-bar { position: absolute; bottom: 20px; right: 50px; display: flex; gap: 5px; align-items: center; }
-    .mana-crystal { width: 15px; height: 15px; background: var(--mana-blue); transform: rotate(45deg); box-shadow: 0 0 5px var(--mana-blue); transition: background 0.2s, box-shadow 0.2s; }
-    .mana-crystal.empty { background: var(--mana-empty); box-shadow: none; }
+/* Degradado inferior para que texto/costo siempre se lean sobre cualquier imagen */
+.card-art::after {
+    content: ""; position: absolute; inset: 0; border-radius: 7px;
+    background: linear-gradient(to top, rgba(10,7,4,0.9) 0%, rgba(10,7,4,0.5) 24%,
+                rgba(10,7,4,0) 50%, rgba(10,7,4,0) 80%, rgba(10,7,4,0.3) 100%);
+}
+
+.mana-cost, .atk-value, .hp-value {
+    position: absolute; width: 30px; height: 30px; border-radius: 50%; z-index: 3;
+    display: flex; justify-content: center; align-items: center; font-weight: bold; border: 2px solid white;
+}
+.mana-cost { top: -5px; left: -5px; background: var(--mana-blue); }
+.atk-value { bottom: -5px; left: -5px; background: var(--atk-yellow); color: black; }
+.hp-value { bottom: -5px; right: -5px; background: var(--health-red); }
+
+.keyword-tag {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%); z-index: 3;
+    font-size: 8px; padding: 2px 4px; border-radius: 4px; white-space: nowrap; font-weight: bold;
+    border: 1px solid rgba(255,255,255,0.6);
+}
+.keyword-tag.k-taunt { background: var(--taunt); }
+.keyword-tag.k-charge { background: var(--charge); }
+.keyword-tag.k-lifesteal { background: var(--lifesteal); }
+
+/* Iconos de arquetipo/asociación: SOLO visibles mientras la carta está compacta */
+.tag-icons { position: absolute; top: 8px; right: 6px; z-index: 3; display: flex; flex-direction: column; gap: 4px; }
+.tag-icon {
+    width: 20px; height: 20px; border-radius: 50%; background: rgba(10,7,4,0.7);
+    border: 1.5px solid var(--border-gold); display: flex; align-items: center; justify-content: center;
+}
+.tag-icon svg { width: 12px; height: 12px; display: block; }
+.card:hover .tag-icons { opacity: 0; pointer-events: none; } /* en hover los reemplaza el panel expandido */
+
+.card-name {
+    position: absolute; bottom: 40px; left: 0; right: 0; z-index: 3;
+    font-size: 10px; text-align: center; font-weight: bold; color: #f3d430; padding: 0 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px #000;
+}
+.card-text {
+    position: absolute; bottom: 20px; left: 4px; right: 4px; z-index: 3;
+    font-size: 8.5px; text-align: center; line-height: 1.15; color: #ddd;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.minion-in-play .atk-value, .minion-in-play .hp-value { width: 26px; height: 26px; font-size: 13px; }
+.minion-in-play .atk-value { left: -2px; bottom: -2px; }
+.minion-in-play .hp-value { right: -2px; bottom: -2px; }
+/* Las cartas en juego (campo) no usan tag-icons ni expanded-panel, siguen igual que hoy */
+
+/* ===== Panel expandido: solo aparece en hover, con habilidad completa,
+   arquetipo/asociación como texto y flavor text ===== */
+.expanded-panel {
+    position: absolute; left: 50%; bottom: -8px; transform: translate(-50%, 100%) scale(0.6);
+    width: 170px; background: linear-gradient(180deg, #241a10, #150e08);
+    border: 2px solid var(--border-gold); border-radius: 8px; padding: 8px 10px 10px;
+    opacity: 0; pointer-events: none; transition: opacity .15s ease .05s, transform .15s ease .05s;
+    box-shadow: 0 10px 22px rgba(0,0,0,0.6); font-size: 10px; transform-origin: top center;
+}
+.card:hover .expanded-panel { opacity: 1; transform: translate(-50%, 100%) scale(0.588); } /* 0.588 = 1/1.7 para compensar el scale del .card:hover */
+.expanded-panel .exp-ability { color: #f1e6c8; line-height: 1.3; margin-bottom: 6px; }
+.expanded-panel .exp-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+.chip {
+    font-size: 8.5px; padding: 2px 6px; border-radius: 20px; border: 1px solid var(--border-gold);
+    background: rgba(195,160,91,0.12); color: #f3d430; white-space: nowrap; display: flex; align-items: center; gap: 3px;
+}
+.chip.origin { border-color: #7ea8c4; color: #bfe0f0; background: rgba(126,168,196,0.12); }
+.chip svg { width: 10px; height: 10px; }
+.expanded-panel .exp-flavor {
+    font-style: italic; color: #b9a988; font-size: 8.5px; line-height: 1.25;
+    border-top: 1px dashed rgba(195,160,91,0.3); padding-top: 5px;
+}
 
     @keyframes drawFromDeck {
         0% { transform: translate(400px, -100px) scale(0.1) rotate(0deg); opacity: 0; }
@@ -162,7 +227,7 @@
     #deck:disabled, #deck.disabled { pointer-events: none; filter: grayscale(1) brightness(0.5); }
 
     #log {
-        position: absolute; left: 20px; top: 20px; max-width: 230px; font-size: 12px;
+        position: absolute; left: 20px; top: 60px; max-width: 230px; font-size: 12px;
         color: #ddd; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 6px;
         max-height: 160px; overflow-y: auto; z-index: 100;
     }
@@ -260,6 +325,199 @@
 const API_BASE = 'http://localhost:8000';
 const DECK_SIZE = 30;
 
+/* =========================================================
+   EVENT BUS + ABILITY SYSTEM
+   Implementación del patrón descrito en
+   arquitectura_habilidades_cartas.txt (Partes 1-5):
+   datos declarativos (abilities[]) + Event Bus + handlers.
+
+   Alcance de esta primera versión: cubre ON_ENTER y ON_DEATH,
+   que es lo único que el motor actual dispara (grito de guerra /
+   estertor). El bus soporta cualquier trigger de la lista del
+   documento; agregar ON_ATTACK, ON_TURN_START, etc. es solo
+   cuestión de hacer eventBus.emit(...) en el punto del código
+   donde ocurre ese momento del juego, y registrar el efecto
+   correspondiente más abajo.
+   ========================================================= */
+class EventBus {
+    constructor() {
+        this.listeners = {}; // { eventName: [callbacks] }
+    }
+    on(eventName, callback) {
+        if (!this.listeners[eventName]) this.listeners[eventName] = [];
+        this.listeners[eventName].push(callback);
+    }
+    off(eventName, callback) {
+        if (!this.listeners[eventName]) return;
+        this.listeners[eventName] = this.listeners[eventName].filter(cb => cb !== callback);
+    }
+    emit(eventName, context) {
+        // .slice() por si un handler desuscribe/suscribe durante el emit
+        (this.listeners[eventName] || []).slice().forEach(cb => cb(context));
+    }
+}
+
+class AbilitySystem {
+    constructor(eventBus) {
+        this.eventBus = eventBus;
+        this.effectHandlers = {};      // { effectName: fn(params, context) }
+        this.cardListeners = new Map(); // cardId -> [{ trigger, callback }]
+    }
+
+    // Registrar un efecto disponible en el juego (una función pura)
+    registerEffect(effectName, handlerFn) {
+        this.effectHandlers[effectName] = handlerFn;
+    }
+
+    // Suscribe las habilidades de una carta al bus cuando entra al campo
+    registerCard(cardId, abilities, extraContext) {
+        const listeners = [];
+        (abilities || []).forEach(ability => {
+            const callback = (context) => {
+                const handler = this.effectHandlers[ability.effect];
+                if (handler) handler(ability.params || {}, { ...context, ...extraContext });
+            };
+            this.eventBus.on(ability.trigger, callback);
+            listeners.push({ trigger: ability.trigger, callback });
+        });
+        this.cardListeners.set(cardId, listeners);
+    }
+
+    // Desuscribe una carta del bus cuando muere o sale del campo
+    unregisterCard(cardId) {
+        const listeners = this.cardListeners.get(cardId) || [];
+        listeners.forEach(({ trigger, callback }) => this.eventBus.off(trigger, callback));
+        this.cardListeners.delete(cardId);
+    }
+}
+
+const eventBus = new EventBus();
+const abilitySystem = new AbilitySystem(eventBus);
+
+// Convierte los campos "legacy" (battlecry/deathrattle de una sola opción)
+// en un array de habilidades declarativas. Esto es lo que permite que
+// cartas viejas (creadas antes de este sistema) y las cartas de prueba
+// generadas al azar sigan funcionando sin cambios.
+function legacyToAbilities(data) {
+    const abilities = [];
+    if (data.battlecry === 'damage_enemy_hero') {
+        abilities.push({ trigger: 'ON_ENTER', effect: 'DEAL_DAMAGE', params: { amount: 1, target: 'ENEMY_HERO' } });
+    }
+    if (data.deathrattle === 'draw_card') {
+        abilities.push({ trigger: 'ON_DEATH', effect: 'DRAW_CARD', params: { amount: 1, player: 'OWNER' } });
+    }
+    return abilities;
+}
+
+// Punto único para obtener las habilidades "reales" de una carta:
+// usa el array declarativo si viene del backend/editor avanzado,
+// y si no, cae en la conversión de los campos legacy.
+function cardAbilities(data) {
+    return Array.isArray(data.abilities) && data.abilities.length ? data.abilities : legacyToAbilities(data);
+}
+
+// Target resolver mínimo: dado un target declarativo (string) + contexto
+// del evento, devuelve a quién/qué aplica el efecto. Puede devolver:
+//   - 'player' / 'enemy' (un héroe)
+//   - un elemento DOM de esbirro
+//   - null si no hay objetivo válido
+const targetResolver = {
+    resolve(targetType, context) {
+        switch (targetType) {
+            case 'ENEMY_HERO': return context.enemySide;
+            case 'OWNER_HERO': return context.owner;
+            case 'RANDOM_ENEMY_MINION': {
+                const minions = Array.from(document.getElementById(context.enemySide + '-minions').children);
+                return minions.length ? pick(minions) : null;
+            }
+            case 'RANDOM_OWN_MINION': {
+                const minions = Array.from(document.getElementById(context.owner + '-minions').children)
+                    .filter(m => m !== context.minionEl);
+                return minions.length ? pick(minions) : null;
+            }
+            // Cualquiera del rival: su héroe o uno de sus esbirros, al azar.
+            case 'ANY_ENEMY': {
+                const minions = Array.from(document.getElementById(context.enemySide + '-minions').children);
+                return pick([context.enemySide, ...minions]);
+            }
+            // Cualquiera propio: tu héroe o uno de tus esbirros, al azar.
+            case 'ANY_OWN': {
+                const minions = Array.from(document.getElementById(context.owner + '-minions').children)
+                    .filter(m => m !== context.minionEl);
+                return pick([context.owner, ...minions]);
+            }
+            default: return null;
+        }
+    },
+
+    // Devuelve un ARRAY de esbirros (no un único objetivo). Lo usa
+    // RETURN_TO_HAND para elegir varios esbirros a la vez.
+    resolveMinionPool(poolType, context) {
+        const playerMinions = () => Array.from(document.getElementById('player-minions').children);
+        const enemyMinions = () => Array.from(document.getElementById('enemy-minions').children);
+        const ownMinions = () => Array.from(document.getElementById(context.owner + '-minions').children);
+        const rivalMinions = () => Array.from(document.getElementById(context.enemySide + '-minions').children);
+
+        switch (poolType) {
+            case 'ENEMY_MINIONS': return rivalMinions();
+            case 'OWN_MINIONS': return ownMinions().filter(m => m !== context.minionEl);
+            case 'ANY_MINIONS': return [...playerMinions(), ...enemyMinions()].filter(m => m !== context.minionEl);
+            case 'ALL_MINIONS': return [...playerMinions(), ...enemyMinions()].filter(m => m !== context.minionEl);
+            default: return [];
+        }
+    }
+};
+
+// --- Effect handlers: qué hace cada efecto que puede declarar una carta ---
+abilitySystem.registerEffect('DEAL_DAMAGE', (params, context) => {
+    const target = targetResolver.resolve(params.target, context);
+    if (!target) return;
+    if (target === 'player' || target === 'enemy') {
+        dealDamageToHero(target, params.amount);
+    } else {
+        damageMinion(target, params.amount);
+    }
+    log(`${context.owner === 'player' ? 'Tu carta activa' : 'La carta rival activa'} una habilidad: ${params.amount} de daño.`);
+});
+
+abilitySystem.registerEffect('HEAL', (params, context) => {
+    const target = targetResolver.resolve(params.target || 'OWNER_HERO', context);
+    if (!target) return;
+    if (target === 'player' || target === 'enemy') {
+        healHero(target, params.amount);
+    } else {
+        healMinion(target, params.amount);
+    }
+    log(`${context.owner === 'player' ? 'Te curás' : 'El rival se cura'} ${params.amount} por una habilidad.`);
+});
+
+abilitySystem.registerEffect('DRAW_CARD', (params, context) => {
+    const side = (!params.player || params.player === 'OWNER') ? context.owner : context.enemySide;
+    const amount = params.amount || 1;
+    for (let i = 0; i < amount; i++) drawCard(side);
+    log(`${side === 'player' ? 'Robaste' : 'El rival roba'} ${amount} carta(s) por una habilidad.`);
+});
+
+abilitySystem.registerEffect('GIVE_CHARGE', (params, context) => {
+    if (context.minionEl) context.minionEl.classList.remove('exhausted');
+});
+
+// Devuelve esbirros del campo a la mano de su dueño. Con target ALL_MINIONS
+// se ignora "amount" y se devuelven todos los esbirros del pool encontrado.
+abilitySystem.registerEffect('RETURN_TO_HAND', (params, context) => {
+    const pool = targetResolver.resolveMinionPool(params.target || 'ENEMY_MINIONS', context);
+    if (!pool.length) return;
+
+    const chosen = params.target === 'ALL_MINIONS'
+        ? pool
+        : shuffle(pool.slice()).slice(0, params.amount || 1);
+
+    chosen.forEach(m => returnMinionToHand(m));
+    if (chosen.length) {
+        log(`${context.owner === 'player' ? 'Devolviste' : 'El rival devuelve'} ${chosen.length} esbirro(s) a la mano por una habilidad.`);
+    }
+});
+
 function resolveImg(path) {
     if (!path) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -295,7 +553,14 @@ function mapDbCardToGameData(dbCard) {
         keyword: dbCard.keyword && dbCard.keyword !== 'none' ? dbCard.keyword : 'none',
         battlecry: dbCard.battlecry && dbCard.battlecry !== 'none' ? dbCard.battlecry : null,
         deathrattle: dbCard.deathrattle && dbCard.deathrattle !== 'none' ? dbCard.deathrattle : null,
-    };
+        // Array declarativo de habilidades (ver arquitectura_habilidades_cartas.txt).
+        // Si la carta no trae ninguna (cartas viejas), cardAbilities() la
+        // reconstruye a partir de battlecry/deathrattle más abajo.
+        abilities: Array.isArray(dbCard.abilities) ? dbCard.abilities : [],
+        origin: dbCard.origin || null,                 // <-- nuevo
+        archetypes: dbCard.archetypes || [],            // <-- nuevo
+        associations: dbCard.associations || [],        // <-- nuevo
+        };
 }
 
 function shuffle(arr) {
@@ -459,11 +724,20 @@ function drawCard(side) {
     p.deck--;
     if (side === 'player') document.getElementById('deck-count').innerText = `${p.deck}/30`;
     else document.getElementById('enemy-deck-count').innerText = `${p.deck}/30`;
-    p.handCount++;
 
     // El jugador roba de su mazo real (armado con las cartas de la base de
     // datos + relleno de prueba); el rival sigue generando cartas al azar.
     const data = side === 'player' ? (state.player.deckCards.shift() || generateCardData()) : generateCardData();
+    addCardToHand(side, data);
+}
+
+// Agrega una carta a la mano de "side" sin tocar el mazo (a diferencia de
+// drawCard). La usan tanto drawCard() como el efecto RETURN_TO_HAND cuando
+// un esbirro vuelve del campo a la mano.
+function addCardToHand(side, data) {
+    const p = state[side];
+    if (p.handCount >= 10) { log(side === 'player' ? 'Tu mano está llena.' : 'La mano del rival está llena.'); return false; }
+    p.handCount++;
 
     if (side === 'enemy') {
         data.id = 'ecard-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
@@ -474,9 +748,14 @@ function drawCard(side) {
         back.id = 'back-' + data.id;
         handEl.appendChild(back);
         refreshEnemyHandFan();
-        return;
+        return true;
     }
 
+    renderPlayerHandCard(data);
+    return true;
+}
+
+function renderPlayerHandCard(data) {
     const hand = document.getElementById('player-hand');
     const card = document.createElement('div');
     card.id = 'card-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
@@ -486,6 +765,8 @@ function drawCard(side) {
     card.dataset.name = data.name || '';
     card.dataset.image = data.image || '';
 
+    const artStyle = data.image ? ` style="background-image: url('${data.image}')"` : '';
+
     if (data.type === 'minion') {
         card.dataset.atk = data.atk;
         card.dataset.hp = data.hp;
@@ -494,26 +775,57 @@ function drawCard(side) {
         card.dataset.deathrattle = data.deathrattle || '';
         if (data.legendary) { card.style.borderColor = 'var(--legendary)'; card.dataset.legendary = '1'; }
 
+        const abilities = cardAbilities(data);
+        card.dataset.abilities = JSON.stringify(abilities);
+        const hasEnter = abilities.some(a => a.trigger === 'ON_ENTER');
+        const hasDeath = abilities.some(a => a.trigger === 'ON_DEATH');
+        const abilitiesFullText = describeAbilities(abilities);
+
         const kwTag = data.keyword !== 'none' ? `<div class="keyword-tag k-${data.keyword}">${keywordLabel(data.keyword)}</div>` : '';
-        const artStyle = data.image ? ` style="background-image: url('${data.image}')"` : '';
+
+        // Iconos compactos de arquetipo/asociación (solo el primero de cada uno,
+        // por espacio — el resto se ve completo en el panel expandido).
+        const archetypes = data.archetypes || [];
+        const associations = data.associations || [];
+        const tagIcons = `
+            ${archetypes[0] ? `<div class="tag-icon" title="Arquetipo: ${archetypes[0]}">${archetypeIconSvg(archetypes[0])}</div>` : ''}
+            ${associations[0] ? `<div class="tag-icon" title="Asociación: ${associations[0]}">${associationIconSvg(associations[0])}</div>` : ''}
+        `;
+
+        // Chips del panel expandido: origen + TODOS los arquetipos/asociaciones
+        const originChip = data.origin ? `<span class="chip origin">${data.origin}</span>` : '';
+        const archetypeChips = archetypes.map(a => `<span class="chip">${archetypeIconSvg(a)}${a}</span>`).join('');
+        const associationChips = associations.map(a => `<span class="chip">${associationIconSvg(a)}${a}</span>`).join('');
+
         card.innerHTML = `
+            <div class="card-art"${artStyle}></div>
             <div class="mana-cost">${data.mana}</div>
             ${kwTag}
-            <div class="card-art"${artStyle}></div>
+            <div class="tag-icons">${tagIcons}</div>
             <div class="card-name">${data.name || (data.legendary ? 'LEGENDARIA' : 'Esbirro')}</div>
-            <div class="card-text">${data.battlecry ? 'Grito de guerra' : ''}${data.battlecry && data.deathrattle ? ' · ' : ''}${data.deathrattle ? 'Estertor' : ''}</div>
+            <div class="card-text">${hasEnter ? 'Grito de guerra' : ''}${hasEnter && hasDeath ? ' · ' : ''}${hasDeath ? 'Estertor' : ''}</div>
             <div class="atk-value">${data.atk}</div>
             <div class="hp-value">${data.hp}</div>
+
+            <div class="expanded-panel">
+                ${abilitiesFullText ? `<div class="exp-ability">${abilitiesFullText}</div>` : ''}
+                ${(originChip || archetypeChips || associationChips) ? `<div class="exp-chips">${originChip}${archetypeChips}${associationChips}</div>` : ''}
+                ${data.flavor ? `<div class="exp-flavor">"${data.flavor}"</div>` : ''}
+            </div>
         `;
     } else {
         card.dataset.effect = data.effect;
         card.dataset.value = data.value;
-        const artStyle = data.image ? ` style="background-image: url('${data.image}')"` : '';
         card.innerHTML = `
-            <div class="mana-cost">${data.mana}</div>
             <div class="card-art"${artStyle}></div>
+            <div class="mana-cost">${data.mana}</div>
             <div class="card-name">${data.name || 'Hechizo'}</div>
             <div class="card-text">${spellText(data.effect, data.value)}</div>
+
+            <div class="expanded-panel">
+                <div class="exp-ability">${spellText(data.effect, data.value)}</div>
+                ${data.flavor ? `<div class="exp-flavor">"${data.flavor}"</div>` : ''}
+            </div>
         `;
     }
 
@@ -527,6 +839,106 @@ function drawCard(side) {
     hand.appendChild(card);
     setTimeout(() => card.classList.remove('drawing'), 500);
     refreshPlayability();
+}
+
+/* =========================================================
+   ICONOS DE ARQUETIPO / ASOCIACIÓN (SVG propios)
+   Vas sumando uno por cada valor real que uses en tus cartas.
+   Si un arquetipo/asociación todavía no tiene ícono definido acá,
+   se usa un fallback automático (círculo con la inicial) para que
+   nunca falte el ícono, aunque no sea el definitivo.
+   ========================================================= */
+const ARCHETYPE_ICONS = {
+    "espadachin": `<svg viewBox="0 0 24 24" fill="none" stroke="#f3d430" stroke-width="2"><path d="M4 20 L18 6 M14 2 L22 10 M2 22 L6 18"/></svg>`,
+    "mago": `<svg viewBox="0 0 24 24" fill="none" stroke="#f3d430" stroke-width="2"><path d="M12 2 L14 9 L21 10 L15 14 L17 21 L12 17 L7 21 L9 14 L3 10 L10 9 Z"/></svg>`,
+    "stand user": `<svg viewBox="0 0 24 24" fill="none" stroke="#f3d430" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 22 C6 16 18 16 18 22"/></svg>`,
+};
+
+const ASSOCIATION_ICONS = {
+    "mugiwaras": `<svg viewBox="0 0 24 24" fill="none" stroke="#bfe0f0" stroke-width="2"><path d="M2 12 a10 6 0 0 1 20 0"/><circle cx="12" cy="12" r="2" fill="#bfe0f0"/></svg>`,
+    "crazy diamond": `<svg viewBox="0 0 24 24" fill="none" stroke="#bfe0f0" stroke-width="2"><path d="M12 2 L20 9 L12 22 L4 9 Z"/></svg>`,
+};
+
+// Fallback: círculo dorado con la primera letra en mayúscula.
+function fallbackIcon(label) {
+    const initial = (label || "?").trim().charAt(0).toUpperCase();
+    return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#c3a05b" stroke-width="2"/>
+            <text x="12" y="16" text-anchor="middle" font-size="11" fill="#f3d430" font-family="Georgia">${initial}</text></svg>`;
+}
+
+function archetypeIconSvg(name) {
+    return ARCHETYPE_ICONS[(name || "").toLowerCase()] || fallbackIcon(name);
+}
+function associationIconSvg(name) {
+    return ASSOCIATION_ICONS[(name || "").toLowerCase()] || fallbackIcon(name);
+}
+
+/* =========================================================
+   TEXTO DE HABILIDAD AUTOGENERADO
+   Traduce cualquier {trigger, effect, params} a una frase legible.
+   Si mañana agregás un effect/trigger nuevo, sumalo acá UNA vez y
+   todas las cartas que lo usen ya van a mostrar el texto correcto.
+   ========================================================= */
+const TRIGGER_LABELS = {
+    ON_ENTER: "Grito de guerra",
+    ON_DEATH: "Estertor",
+    ON_ATTACK: "Al atacar",
+    ON_DAMAGE_TAKEN: "Al recibir daño",
+    ON_HEAL: "Al ser curado",
+    ON_TURN_START: "Al inicio de tu turno",
+    ON_TURN_END: "Al final de tu turno",
+    ON_SPELL_CAST: "Al lanzar un hechizo",
+    ON_FRIENDLY_DEATH: "Cuando muere un aliado",
+    ON_ENEMY_ATTACK: "Cuando el rival ataca",
+    ON_DRAW: "Al robar",
+    ON_DAMAGE_DEALT: "Al infligir daño",
+};
+
+const TARGET_LABELS = {
+    ENEMY_HERO: "al héroe enemigo",
+    OWNER_HERO: "a tu héroe",
+    RANDOM_ENEMY_MINION: "a un esbirro enemigo al azar",
+    RANDOM_OWN_MINION: "a un esbirro aliado al azar",
+    ANY_ENEMY: "a algo del rival al azar",
+    ANY_OWN: "a algo tuyo al azar",
+    ENEMY_MINIONS: "a los esbirros enemigos",
+    OWN_MINIONS: "a tus esbirros",
+    ANY_MINIONS: "a cualquier esbirro",
+    ALL_MINIONS: "a todos los esbirros",
+};
+
+function describeEffect(effect, params = {}) {
+    switch (effect) {
+        case "DEAL_DAMAGE":
+            return `Inflige ${params.amount ?? "?"} de daño ${TARGET_LABELS[params.target] || ""}.`;
+        case "HEAL":
+            return `Restaura ${params.amount ?? "?"} de vida ${TARGET_LABELS[params.target || "OWNER_HERO"] || ""}.`;
+        case "DRAW_CARD": {
+            const amount = params.amount || 1;
+            const who = (!params.player || params.player === "OWNER") ? "" : " el rival";
+            return amount > 1 ? `${who ? "El rival roba" : "Roba"} ${amount} cartas.` : `${who ? "El rival roba" : "Roba"} 1 carta.`;
+        }
+        case "GIVE_CHARGE":
+            return "Puede atacar de inmediato.";
+        case "RETURN_TO_HAND": {
+            const amount = params.amount || 1;
+            const targetLabel = TARGET_LABELS[params.target || "ENEMY_MINIONS"] || "";
+            return params.target === "ALL_MINIONS"
+                ? `Devuelve ${targetLabel} a la mano.`
+                : `Devuelve ${amount} esbirro(s) ${targetLabel.replace("a los ", "de los ").replace("a ", "de ")} a la mano.`;
+        }
+        default:
+            return "";
+    }
+}
+
+// Une todas las habilidades de una carta en un solo texto para el panel expandido.
+// Ej: "Grito de guerra: inflige 2 de daño al héroe enemigo. Estertor: roba 1 carta."
+function describeAbilities(abilities) {
+    if (!abilities || !abilities.length) return "";
+    return abilities
+        .map(a => `${TRIGGER_LABELS[a.trigger] || a.trigger}: ${describeEffect(a.effect, a.params)}`)
+        .join(" ");
 }
 
 /* =========================================================
@@ -581,8 +993,16 @@ function playCardFromElement(cardElement, side) {
     minion.dataset.atk = cardElement.dataset.atk;
     minion.dataset.hp = cardElement.dataset.hp;
     minion.dataset.maxhp = cardElement.dataset.hp;
+    minion.dataset.baseatk = cardElement.dataset.atk; // ataque "de fábrica", por si se devuelve a la mano
+    minion.dataset.mana = cardElement.dataset.mana;
+    minion.dataset.name = cardElement.dataset.name || '';
+    minion.dataset.image = cardElement.dataset.image || '';
     minion.dataset.keyword = keyword;
     minion.dataset.deathrattle = cardElement.dataset.deathrattle || '';
+    // Habilidades declarativas: viajan con el esbirro mientras esté en juego,
+    // para poder emitir ON_DEATH cuando muera más adelante.
+    const abilities = JSON.parse(cardElement.dataset.abilities || '[]');
+    minion.dataset.abilities = JSON.stringify(abilities);
 
     if (cardElement.dataset.image) minion.style.backgroundImage = `url('${cardElement.dataset.image}')`;
 
@@ -594,11 +1014,11 @@ function playCardFromElement(cardElement, side) {
 
     battlefield.appendChild(minion);
 
-    const battlecry = cardElement.dataset.battlecry;
-    if (battlecry === 'damage_enemy_hero') {
-        dealDamageToHero(side === 'player' ? 'enemy' : 'player', 1);
-        log(`${side === 'player' ? 'Tu' : 'El'} esbirro activa su grito de guerra: 1 de daño.`);
-    }
+    // Suscribe las habilidades de este esbirro al Event Bus y dispara ON_ENTER
+    // (reemplaza el antiguo "if (battlecry === ...)" hardcodeado).
+    const enemySide = side === 'player' ? 'enemy' : 'player';
+    abilitySystem.registerCard(minion.id, abilities, {});
+    eventBus.emit('ON_ENTER', { owner: side, enemySide, minionEl: minion });
 
     cardElement.remove();
     log(`${side === 'player' ? 'Invocaste' : 'El rival invoca'} ${cardElement.dataset.name ? `"${cardElement.dataset.name}"` : 'un esbirro'} ${minion.dataset.atk}/${minion.dataset.hp}${keyword !== 'none' ? ' (' + keywordLabel(keyword) + ')' : ''}.`);
@@ -662,18 +1082,59 @@ function damageMinion(minionEl, amount) {
     if (newHp <= 0) killMinion(minionEl);
 }
 
+// Cura a un esbirro en el campo (para el efecto HEAL cuando el objetivo no
+// es un héroe sino un esbirro). Nunca supera su vida máxima original.
+function healMinion(minionEl, amount) {
+    const maxHp = parseInt(minionEl.dataset.maxhp);
+    const newHp = Math.min(maxHp, parseInt(minionEl.dataset.hp) + amount);
+    minionEl.dataset.hp = newHp;
+    minionEl.querySelector('.hp-value').innerText = newHp;
+}
+
 function killMinion(minionEl) {
     const side = minionEl.dataset.side;
-    const deathrattle = minionEl.dataset.deathrattle;
     minionEl.classList.add('dying');
     state[side].minionCount--;
-    if (deathrattle === 'draw_card') {
-        drawCard(side);
-        log(`${side === 'player' ? 'Tu' : 'El'} esbirro caído activa su estertor: robas una carta.`);
-    }
+
+    // Dispara ON_DEATH para que el Ability System ejecute cualquier
+    // habilidad de estertor que la carta tenga declarada, y luego
+    // desuscribe sus handlers del Event Bus (ya no debe reaccionar a nada más).
+    const enemySide = side === 'player' ? 'enemy' : 'player';
+    eventBus.emit('ON_DEATH', { owner: side, enemySide, minionEl });
+    abilitySystem.unregisterCard(minionEl.id);
+
     if (state.selectedAttacker === minionEl.id) clearSelection();
     setTimeout(() => minionEl.remove(), 350);
 }
+
+// Devuelve un esbirro del campo a la mano de su dueño (efecto RETURN_TO_HAND).
+// A diferencia de killMinion, esto NO dispara ON_DEATH: la carta no murió,
+// simplemente vuelve a la mano con sus stats "de fábrica" (sin daño ni buffs).
+function returnMinionToHand(minionEl) {
+    const side = minionEl.dataset.side;
+    if (state[side].handCount >= 10) {
+        log(`${side === 'player' ? 'Tu' : 'La'} mano está llena: no se pudo devolver un esbirro.`);
+        return;
+    }
+    abilitySystem.unregisterCard(minionEl.id);
+    state[side].minionCount--;
+
+    const data = {
+        type: 'minion',
+        mana: parseInt(minionEl.dataset.mana || '0'),
+        atk: parseInt(minionEl.dataset.baseatk ?? minionEl.dataset.atk),
+        hp: parseInt(minionEl.dataset.maxhp),
+        keyword: minionEl.dataset.keyword || 'none',
+        name: minionEl.dataset.name || '',
+        image: minionEl.dataset.image || '',
+        abilities: JSON.parse(minionEl.dataset.abilities || '[]'),
+    };
+
+    if (state.selectedAttacker === minionEl.id) clearSelection();
+    minionEl.remove();
+    addCardToHand(side, data);
+}
+
 
 /* =========================================================
    COMBATE
@@ -874,6 +1335,7 @@ function buildTempCardElement(data) {
         el.dataset.keyword = data.keyword;
         el.dataset.battlecry = data.battlecry || '';
         el.dataset.deathrattle = data.deathrattle || '';
+        el.dataset.abilities = JSON.stringify(cardAbilities(data));
     } else {
         el.dataset.effect = data.effect;
         el.dataset.value = data.value;

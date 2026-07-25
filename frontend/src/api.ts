@@ -57,3 +57,21 @@ export async function deleteCard(id: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/cards/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Error al borrar carta");
 }
+
+export async function getOrigins(): Promise<string[]> {
+  const res = await fetch(`${BASE_URL}/cards/meta/origins`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getArchetypes(): Promise<string[]> {
+  const res = await fetch(`${BASE_URL}/cards/meta/archetypes`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getAssociations(): Promise<string[]> {
+  const res = await fetch(`${BASE_URL}/cards/meta/associations`);
+  if (!res.ok) return [];
+  return res.json();
+}

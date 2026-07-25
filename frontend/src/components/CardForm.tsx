@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import type { CardData, Keyword, SpellEffect } from "../types";
+import type { Ability, CardData, Effect, Keyword, SimpleTrigger, SpellEffect } from "../types";
+import { EFFECT_CATALOG, TRIGGER_OPTIONS, defaultAbility } from "../types";
 import { emptyCard } from "../types";
-import { resolveImageUrl } from "../api";
+import { resolveImageUrl, getOrigins, getArchetypes, getAssociations } from "../api";
 
 interface Props {
   initialCard?: CardData;
@@ -16,11 +17,79 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
+  const [jsonMode, setJsonMode] = useState(false);
+  const [abilitiesText, setAbilitiesText] = useState(
+    JSON.stringify(initialCard?.abilities ?? [], null, 2)
+  );
+  const [abilitiesError, setAbilitiesError] = useState<string | null>(null);
+
+  // Estados para opciones de autocompletado
+  const [originOptions, setOriginOptions] = useState<string[]>([]);
+  const [archetypeOptions, setArchetypeOptions] = useState<string[]>([]);
+  const [associationOptions, setAssociationOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Carga de listas al montar
+    getOrigins().then(setOriginOptions);
+    getArchetypes().then(setArchetypeOptions);
+    getAssociations().then(setAssociationOptions);
+  }, []);
+
   useEffect(() => {
     setCard(initialCard ?? emptyCard);
     setImageFile(null);
     setPreview(null);
+    setAbilitiesText(JSON.stringify(initialCard?.abilities ?? [], null, 2));
+    setAbilitiesError(null);
+    setJsonMode(false);
   }, [initialCard]);
+
+  function handleAbilitiesTextChange(text: string) {
+    setAbilitiesText(text);
+    try {
+      const parsed = JSON.parse(text || "[]");
+      if (!Array.isArray(parsed)) throw new Error("Debe ser un array");
+      setAbilitiesError(null);
+      update("abilities", parsed);
+    } catch (err) {
+      setAbilitiesError(err instanceof Error ? err.message : "JSON inválido");
+    }
+  }
+
+  function switchToJsonMode() {
+    setAbilitiesText(JSON.stringify(card.abilities, null, 2));
+    setAbilitiesError(null);
+    setJsonMode(true);
+  }
+
+  function switchToBuilderMode() {
+    try {
+      const parsed = JSON.parse(abilitiesText || "[]");
+      if (!Array.isArray(parsed)) throw new Error("Debe ser un array");
+      update("abilities", parsed);
+      setAbilitiesError(null);
+      setJsonMode(false);
+    } catch (err) {
+      setAbilitiesError(err instanceof Error ? err.message : "JSON inválido");
+    }
+  }
+
+  function addAbility() {
+    update("abilities", [...card.abilities, defaultAbility("DEAL_DAMAGE")]);
+  }
+
+  function updateAbility(index: number, next: Ability) {
+    const copy = card.abilities.slice();
+    copy[index] = next;
+    update("abilities", copy);
+  }
+
+  function removeAbility(index: number) {
+    update(
+      "abilities",
+      card.abilities.filter((_, i) => i !== index)
+    );
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -32,9 +101,6 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
     setCard((prev) => ({ ...prev, [key]: value }));
   }
 
-  // Los checks de palabra clave son mutuamente excluyentes en este juego
-  // (un esbirro tiene una palabra clave a la vez): se muestran como checkboxes
-  // pero internamente se guardan como un único valor "keyword".
   function toggleKeyword(k: Keyword) {
     update("keyword", card.keyword === k ? "none" : k);
   }
@@ -42,11 +108,15 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (abilitiesError) {
+      setError(`El JSON de habilidades no es válido: ${abilitiesError}`);
+      return;
+    }
     setSaving(true);
     try {
       await onSubmit(card, imageFile);
       if (!initialCard) {
-        setCard(emptyCard); // limpia el form solo si es una carta nueva
+        setCard(emptyCard);
         setImageFile(null);
         setPreview(null);
       }
@@ -141,6 +211,41 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
             </label>
           </div>
 
+          <label style={styles.label}>
+            Origen (anime)
+            <input
+              style={styles.input}
+              list="origin-options"
+              value={card.origin ?? ""}
+              onChange={(e) => update("origin", e.target.value)}
+              placeholder="Elegí uno existente o escribí uno nuevo"
+              maxLength={60}
+            />
+            <datalist id="origin-options">
+              {originOptions.map((o) => (
+                <option key={o} value={o} />
+              ))}
+            </datalist>
+          </label>
+
+          <TagPicker
+            label="Arquetipos"
+            values={card.archetypes ?? []}
+            onChange={(v) => update("archetypes", v)}
+            max={2}
+            placeholder="Ej: espadachin"
+            options={archetypeOptions}
+          />
+
+          <TagPicker
+            label="Asociaciones"
+            values={card.associations ?? []}
+            onChange={(v) => update("associations", v)}
+            max={2}
+            placeholder="Ej: mugiwaras"
+            options={associationOptions}
+          />
+
           <fieldset style={styles.fieldset}>
             <legend>Palabra clave</legend>
             <label style={styles.checkLabel}>
@@ -169,28 +274,38 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
             </label>
           </fieldset>
 
-          <div style={styles.row}>
-            <label style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={card.battlecry === "damage_enemy_hero"}
-                onChange={(e) =>
-                  update("battlecry", e.target.checked ? "damage_enemy_hero" : "none")
-                }
-              />
-              Grito de guerra: 1 daño al héroe rival
-            </label>
-            <label style={styles.checkLabel}>
-              <input
-                type="checkbox"
-                checked={card.deathrattle === "draw_card"}
-                onChange={(e) =>
-                  update("deathrattle", e.target.checked ? "draw_card" : "none")
-                }
-              />
-              Estertor: roba una carta
-            </label>
+          <div style={styles.abilitiesHeader}>
+            <span style={{ fontWeight: "bold" }}>Habilidades</span>
+            <button
+              type="button"
+              onClick={jsonMode ? switchToBuilderMode : switchToJsonMode}
+              style={styles.linkBtn}
+            >
+              {jsonMode ? "Volver al editor visual" : "Modo experto (JSON)"}
+            </button>
           </div>
+
+          {jsonMode ? (
+            <label style={styles.label}>
+              JSON de habilidades
+              <textarea
+                style={{ ...styles.input, height: 90, fontFamily: "monospace", fontSize: 12 }}
+                value={abilitiesText}
+                onChange={(e) => handleAbilitiesTextChange(e.target.value)}
+                placeholder={'[{ "trigger": "ON_ENTER", "effect": "DEAL_DAMAGE", "params": { "amount": 1, "target": "ENEMY_HERO" } }]'}
+              />
+            </label>
+          ) : (
+            <AbilityEditor
+              abilities={card.abilities}
+              onAdd={addAbility}
+              onChange={updateAbility}
+              onRemove={removeAbility}
+            />
+          )}
+          {abilitiesError && (
+            <div style={styles.error}>JSON de habilidades inválido: {abilitiesError}</div>
+          )}
         </>
       ) : (
         <>
@@ -286,16 +401,72 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
   );
 }
 
-interface ImagePositionEditorProps {
-  src: string;
-  posX: number;
-  posY: number;
-  scale: number;
-  onChange: (posX: number, posY: number) => void;
+/**
+ * Componente TagPicker para Arquetipos y Asociaciones con Autocompletado
+ */
+function TagPicker({
+  label, values, onChange, max, placeholder, options = [],
+}: {
+  label: string;
+  values: string[];
+  onChange: (v: string[]) => void;
+  max: number;
+  placeholder: string;
+  options?: string[];
+}) {
+  const [draft, setDraft] = useState("");
+  const listId = `${label}-datalist`.replace(/\s+/g, "-");
+
+  function addTag(raw?: string) {
+    const v = (raw ?? draft).trim().toLowerCase();
+    if (!v || values.includes(v) || values.length >= max) return;
+    onChange([...values, v]);
+    setDraft("");
+  }
+
+  return (
+    <div style={styles.fieldset}>
+      <div style={{ fontWeight: "bold", marginBottom: 4, fontSize: 13 }}>
+        {label} ({values.length}/{max})
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+        {values.map((v) => (
+          <span key={v} style={styles.tag}>
+            {v}
+            <button 
+              type="button" 
+              style={styles.tagRemoveBtn}
+              onClick={() => onChange(values.filter((x) => x !== v))}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      {values.length < max && (
+        <>
+          <input
+            style={{ ...styles.input, width: "100%" }}
+            list={listId}
+            value={draft}
+            placeholder={placeholder}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); addTag(); }
+            }}
+            onBlur={() => addTag()}
+          />
+          <datalist id={listId}>
+            {options.filter((o) => !values.includes(o)).map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
+        </>
+      )}
+    </div>
+  );
 }
 
-// Cuadro donde se ve la imagen recortada como quedaría en la carta.
-// Arrastrando con el mouse (o el dedo) se cambia qué parte de la imagen queda visible.
 function ImagePositionEditor({ src, posX, posY, scale, onChange }: ImagePositionEditorProps) {
   const [box, setBox] = useState<HTMLDivElement | null>(null);
   const dragging = useRef({ active: false, lastX: 0, lastY: 0 }).current;
@@ -319,8 +490,6 @@ function ImagePositionEditor({ src, posX, posY, scale, onChange }: ImagePosition
     dragging.lastY = e.clientY;
 
     const rect = box.getBoundingClientRect();
-    // Arrastrar hacia la derecha muestra más de la parte izquierda de la imagen,
-    // por eso restamos el delta en vez de sumarlo.
     const newX = clamp(posX - (dx / rect.width) * 100);
     const newY = clamp(posY - (dy / rect.height) * 100);
     onChange(newX, newY);
@@ -366,6 +535,139 @@ function ImagePositionEditor({ src, posX, posY, scale, onChange }: ImagePosition
   );
 }
 
+interface ImagePositionEditorProps {
+  src: string;
+  posX: number;
+  posY: number;
+  scale: number;
+  onChange: (posX: number, posY: number) => void;
+}
+
+interface AbilityEditorProps {
+  abilities: Ability[];
+  onAdd: () => void;
+  onChange: (index: number, next: Ability) => void;
+  onRemove: (index: number) => void;
+}
+
+function AbilityEditor({ abilities, onAdd, onChange, onRemove }: AbilityEditorProps) {
+  return (
+    <div style={styles.abilitiesBox}>
+      {abilities.length === 0 && (
+        <span style={{ fontSize: 12, color: "#ccc" }}>Esta carta todavía no tiene habilidades.</span>
+      )}
+      {abilities.map((ability, index) => (
+        <AbilityRow
+          key={index}
+          ability={ability}
+          onChange={(next) => onChange(index, next)}
+          onRemove={() => onRemove(index)}
+        />
+      ))}
+      <button type="button" onClick={onAdd} style={styles.addAbilityBtn}>
+        + Agregar habilidad
+      </button>
+    </div>
+  );
+}
+
+interface AbilityRowProps {
+  ability: Ability;
+  onChange: (next: Ability) => void;
+  onRemove: () => void;
+}
+
+function AbilityRow({ ability, onChange, onRemove }: AbilityRowProps) {
+  const def = EFFECT_CATALOG[ability.effect];
+  const params = ability.params ?? {};
+
+  function setTrigger(trigger: SimpleTrigger) {
+    onChange({ ...ability, trigger });
+  }
+
+  function setEffect(effect: Effect) {
+    onChange(defaultAbility(effect, ability.trigger as SimpleTrigger));
+  }
+
+  function setParam(key: string, value: string | number) {
+    onChange({ ...ability, params: { ...params, [key]: value } });
+  }
+
+  return (
+    <div style={styles.abilityRow}>
+      <div style={styles.abilityRowTop}>
+        <select
+          style={styles.input}
+          value={ability.trigger}
+          onChange={(e) => setTrigger(e.target.value as SimpleTrigger)}
+        >
+          {TRIGGER_OPTIONS.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          style={styles.input}
+          value={ability.effect}
+          onChange={(e) => setEffect(e.target.value as Effect)}
+        >
+          {(Object.keys(EFFECT_CATALOG) as Effect[]).map((key) => (
+            <option key={key} value={key}>
+              {EFFECT_CATALOG[key].label}
+            </option>
+          ))}
+        </select>
+
+        <button type="button" onClick={onRemove} style={styles.removeAbilityBtn} title="Quitar habilidad">
+          ✕
+        </button>
+      </div>
+
+      <span style={{ fontSize: 11, color: "#ccc" }}>{def.description}</span>
+
+      {def.params.length > 0 && (
+        <div style={styles.row}>
+          {def.params
+            .filter((p) => {
+              if (!p.hideWhenParam) return true;
+              const otherValue = params[p.hideWhenParam.key];
+              return !p.hideWhenParam.oneOf.includes(String(otherValue));
+            })
+            .map((p) => (
+              <label key={p.key} style={styles.label}>
+                {p.label}
+                {p.kind === "number" ? (
+                  <input
+                    type="number"
+                    style={styles.input}
+                    min={p.min}
+                    max={p.max}
+                    value={Number(params[p.key] ?? p.default)}
+                    onChange={(e) => setParam(p.key, Number(e.target.value))}
+                  />
+                ) : (
+                  <select
+                    style={styles.input}
+                    value={String(params[p.key] ?? p.default)}
+                    onChange={(e) => setParam(p.key, e.target.value)}
+                  >
+                    {p.options?.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   form: {
     display: "flex",
@@ -394,8 +696,64 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #c3a05b",
     borderRadius: 6,
     display: "flex",
-    gap: 16,
+    flexDirection: "column",
+    gap: 8,
     padding: 10,
+  },
+  abilitiesHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  linkBtn: {
+    background: "none",
+    border: "none",
+    color: "#f3d430",
+    textDecoration: "underline",
+    cursor: "pointer",
+    fontSize: 12,
+    padding: 0,
+  },
+  abilitiesBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    border: "1px solid #c3a05b",
+    borderRadius: 6,
+    padding: 10,
+    background: "#1c140d",
+  },
+  abilityRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    border: "1px solid #4a3a26",
+    borderRadius: 6,
+    padding: 8,
+  },
+  abilityRowTop: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+  },
+  addAbilityBtn: {
+    padding: "6px 12px",
+    background: "#3a2f22",
+    border: "1px solid #c3a05b",
+    borderRadius: 5,
+    color: "#f3d430",
+    cursor: "pointer",
+    alignSelf: "flex-start",
+    fontSize: 13,
+  },
+  removeAbilityBtn: {
+    background: "#5a1a1a",
+    border: "none",
+    borderRadius: 5,
+    color: "#fff",
+    cursor: "pointer",
+    padding: "4px 10px",
   },
   actions: { display: "flex", gap: 10, marginTop: 8 },
   submitBtn: {
@@ -422,4 +780,24 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 5,
     fontSize: 12,
   },
+  tag: {
+    background: "#c3a05b",
+    color: "#241a12",
+    padding: "2px 8px",
+    borderRadius: 12,
+    fontSize: 11,
+    fontWeight: "bold",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  tagRemoveBtn: {
+    background: "none",
+    border: "none",
+    color: "#241a12",
+    cursor: "pointer",
+    padding: 0,
+    fontSize: 14,
+    lineHeight: 1,
+  }
 };
