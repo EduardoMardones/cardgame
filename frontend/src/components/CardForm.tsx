@@ -4,6 +4,7 @@ import { EFFECT_CATALOG, TRIGGER_OPTIONS, defaultAbility } from "../types";
 import { emptyCard } from "../types";
 import { resolveImageUrl, getOrigins, getArchetypes, getAssociations } from "../api";
 
+
 interface Props {
   initialCard?: CardData;
   onSubmit: (card: CardData, imageFile?: File | null) => Promise<void>;
@@ -499,6 +500,10 @@ function ImagePositionEditor({ src, posX, posY, scale, onChange }: ImagePosition
     dragging.active = false;
   }
 
+  // Misma proporción que la carta real del juego (130 x 180 ~ 0.722)
+  const CARD_WIDTH = 180;
+  const CARD_HEIGHT = 250;
+
   return (
     <div
       ref={setBox}
@@ -507,14 +512,15 @@ function ImagePositionEditor({ src, posX, posY, scale, onChange }: ImagePosition
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
       style={{
-        width: "100%",
-        height: 140,
-        borderRadius: 6,
-        border: "1px solid #c3a05b",
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        borderRadius: 14,
+        border: "3px solid #c3a05b",
         overflow: "hidden",
         cursor: "grab",
         touchAction: "none",
         background: "#111",
+        margin: "0 auto",
       }}
     >
       <img
@@ -534,6 +540,7 @@ function ImagePositionEditor({ src, posX, posY, scale, onChange }: ImagePosition
     </div>
   );
 }
+
 
 interface ImagePositionEditorProps {
   src: string;

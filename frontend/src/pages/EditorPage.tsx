@@ -48,7 +48,6 @@ export default function EditorPage() {
     // para que el botón "← Menú" (que va con position: fixed) tenga
     // una referencia clara y no flote en cualquier lado.
     <div style={{ background: "#111", minHeight: "100vh", padding: 24, fontFamily: "Arial", position: "relative" }}>
-
       {/* CAMBIO 2: agrego el Link, esta es la única línea nueva de JSX */}
       <Link to="/" style={backButtonStyle}>← Menú</Link>
 

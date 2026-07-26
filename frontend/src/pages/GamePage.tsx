@@ -2,8 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function GamePage() {
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <Link to="/" style={backButtonStyle}>← Menú</Link>
+    <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>      <Link to="/" style={backButtonStyle}>← Menú</Link>
       <iframe
         src="/game/game.html"
         style={{ border: "none", width: "100%", height: "100%", display: "block" }}
