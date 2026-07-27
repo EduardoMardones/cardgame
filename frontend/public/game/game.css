@@ -92,12 +92,12 @@
     .minion-in-play.blocked-target { filter: brightness(0.5); cursor: not-allowed; }
 
     .minion-in-play:hover {
-        transform: scale(1.55);
+        transform: scale(2.17);
         z-index: 200;
         filter: none;
         box-shadow: 0 14px 30px rgba(0,0,0,0.8);
     }
-    .minion-in-play.selected:hover { transform: translateY(-10px) scale(1.55); }
+    .minion-in-play.selected:hover { transform: translateY(-10px) scale(2.17); }
     @keyframes spawn { from { transform: scale(0); } to { transform: scale(1); } }
     .minion-in-play.dying { animation: dying 0.35s forwards; pointer-events: none; }
     @keyframes dying { to { transform: scale(0) rotate(30deg); opacity: 0; } }
@@ -138,7 +138,7 @@
     border-radius: 10px; margin: 0 -15px; position: relative; transition: all 0.25s ease;
     cursor: grab; transform-origin: bottom center; user-select: none;
 }
-.card:hover { transform: translateY(-110px) scale(1.7) !important; z-index: 1000 !important; box-shadow: 0 14px 34px rgba(0,0,0,0.8); }
+.card:hover { transform: translateY(-110px) scale(2.38) !important; z-index: 1000 !important; box-shadow: 0 14px 34px rgba(0,0,0,0.8); }
 .card:active { cursor: grabbing; }
 .card.unplayable { filter: grayscale(0.6) brightness(0.55); }
 .card.dragging { opacity: 0.35; }
@@ -199,7 +199,7 @@
     opacity: 0; pointer-events: none; transition: opacity .15s ease .05s, transform .15s ease .05s;
     box-shadow: 0 10px 22px rgba(0,0,0,0.6); font-size: 10px; transform-origin: top center; z-index: 1001;
 }
-.card:hover .expanded-panel { opacity: 1; transform: translate(-50%, 100%) scale(0.588); } 
+.card:hover .expanded-panel { opacity: 1; transform: translate(-50%, 100%) scale(0.588); }
 
 .minion-in-play .expanded-panel.minion-panel {
     transform: translate(-50%, 100%) scale(0.645);
