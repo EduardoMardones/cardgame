@@ -172,7 +172,7 @@ export interface CardData {
   legendary: boolean;
   origin?: string;
   archetypes: string[];
-  associations: string[];
+  teams: string[];
 
   attack?: number | null;
   health?: number | null;
@@ -206,7 +206,7 @@ export const emptyCard: CardData = {
   legendary: false,
   origin: "",
   archetypes: [],
-  associations: [],
+  teams: [],
   attack: 1,
   health: 1,
   keyword: "none",
@@ -221,3 +221,14 @@ export const emptyCard: CardData = {
   image_scale: 100,
   flavor_text: "",
 };
+
+// --- Catálogos administrables: Orígenes, Arquetipos, Equipos ---
+// Son listas simples (solo nombre) que se gestionan aparte de las cartas,
+// como "empleados" (cartas) vs. "áreas de trabajo" (estos catálogos).
+// `icon` queda reservado para el futuro (ej. un ícono SVG o emoji por
+// entrada); hoy no se usa en la UI, por eso es opcional.
+export interface CatalogEntry {
+  id: string;
+  name: string;
+  icon?: string | null;
+}

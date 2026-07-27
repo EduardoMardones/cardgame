@@ -54,7 +54,7 @@ class Card(Base):
     # --- Identidad temática (solo para esbirros/personajes) ---
     origin = Column(String, nullable=True)                 # ej: "One Piece"
     archetypes = Column(JSONB, nullable=False, default=list, server_default="[]")     # ej: ["espadachin"]
-    associations = Column(JSONB, nullable=False, default=list, server_default="[]")   # ej: ["mugiwaras"]
+    teams = Column(JSONB, nullable=False, default=list, server_default="[]")          # ej: ["mugiwaras"]
 
     # Solo aplica a esbirros (nullable para hechizos)
     attack = Column(Integer, nullable=True)
@@ -88,3 +88,38 @@ class Card(Base):
     image_pos_y = Column(Integer, default=50)  # 0-100, % vertical del recorte
     image_scale = Column(Integer, default=100)  # 100 = sin zoom, 300 = 3x
     flavor_text = Column(String, nullable=True)
+
+
+# --- Catálogos administrables ---
+# Origen, Arquetipo y Equipo (ex "Asociación") son catálogos propios,
+# independientes de las cartas: se pueden crear/borrar aunque todavía
+# ninguna carta los use, igual que "áreas de trabajo" existen aparte de
+# los "empleados" que las usan. Las cartas siguen guardando estos valores
+# como texto plano (`origin`, `archetypes`, `teams`), y estas tablas solo
+# alimentan las listas de opciones del editor.
+#
+# `icon` queda nullable a propósito: hoy no se usa en la UI, es un campo
+# reservado por si en el futuro se le agrega un ícono a cada entrada.
+
+class Origin(Base):
+    __tablename__ = "origins"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False, unique=True)
+    icon = Column(String, nullable=True)
+
+
+class Archetype(Base):
+    __tablename__ = "archetypes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False, unique=True)
+    icon = Column(String, nullable=True)
+
+
+class Team(Base):
+    __tablename__ = "teams"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False, unique=True)
+    icon = Column(String, nullable=True)

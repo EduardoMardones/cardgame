@@ -49,7 +49,7 @@ class CardBase(BaseModel):
 
     origin: Optional[str] = Field(default=None, max_length=60)
     archetypes: list[str] = Field(default_factory=list, max_length=2)
-    associations: list[str] = Field(default_factory=list, max_length=2)
+    teams: list[str] = Field(default_factory=list, max_length=2)
 
     attack: Optional[int] = Field(default=None, ge=0, le=20)
     health: Optional[int] = Field(default=None, ge=1, le=20)
@@ -90,8 +90,8 @@ class CardBase(BaseModel):
         if self.card_type == CardType.spell:
             if self.spell_effect is None:
                 raise ValueError("Los hechizos necesitan 'spell_effect'.")
-            if self.origin or self.archetypes or self.associations:
-                raise ValueError("Los hechizos no llevan origen/arquetipo/asociación.")
+            if self.origin or self.archetypes or self.teams:
+                raise ValueError("Los hechizos no llevan origen/arquetipo/equipo.")
         return self
 
 
@@ -108,3 +108,47 @@ class CardOut(CardBase):
 
     class Config:
         from_attributes = True
+
+
+# --- Catálogos administrables: Orígenes, Arquetipos, Equipos ---
+# Listas simples (solo nombre) que se gestionan aparte de las cartas.
+# `icon` va nullable/opcional a propósito: reservado para el futuro,
+# hoy el frontend no lo pide.
+class CatalogEntryBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=60)
+    icon: Optional[str] = Field(default=None, max_length=200)
+
+
+class CatalogEntryCreate(CatalogEntryBase):
+    pass
+
+
+class CatalogEntryOut(CatalogEntryBase):
+    id: uuid.UUID
+
+    class Config:
+        from_attributes = True
+
+
+class OriginCreate(CatalogEntryCreate):
+    pass
+
+
+class OriginOut(CatalogEntryOut):
+    pass
+
+
+class ArchetypeCreate(CatalogEntryCreate):
+    pass
+
+
+class ArchetypeOut(CatalogEntryOut):
+    pass
+
+
+class TeamCreate(CatalogEntryCreate):
+    pass
+
+
+class TeamOut(CatalogEntryOut):
+    pass

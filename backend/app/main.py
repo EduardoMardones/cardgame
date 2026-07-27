@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
-from .routers import cards
+from .routers import cards, catalog
 
 # Crea las tablas si no existen (para un proyecto más grande, usar Alembic en vez de esto)
 Base.metadata.create_all(bind=engine)
@@ -28,6 +28,7 @@ os.makedirs(os.path.join(STATIC_DIR, "uploads"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.include_router(cards.router)
+app.include_router(catalog.router)
 
 
 @app.get("/health")

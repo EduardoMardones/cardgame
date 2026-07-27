@@ -39,15 +39,28 @@ def delete_card(db: Session, card_id: uuid.UUID):
     db.commit()
     return db_card
 
-def get_distinct_origins(db: Session):
-    rows = db.query(models.Card.origin).filter(models.Card.origin.isnot(None)).distinct().all()
-    return sorted({r[0] for r in rows if r[0]})
+
+# --- CRUD genérico para catálogos (Origin, Archetype, Team) ---
+# Los tres modelos son estructuralmente iguales (id, name, icon), así que
+# un solo set de funciones parametrizado por `model` sirve para los tres
+# en vez de triplicar el mismo código.
+
+def get_catalog_entries(db: Session, model):
+    return db.query(model).order_by(model.name).all()
 
 
-def get_distinct_tags(db: Session, column):
-    rows = db.query(column).all()
-    tags: set[str] = set()
-    for (arr,) in rows:
-        if arr:
-            tags.update(arr)
-    return sorted(tags)
+def create_catalog_entry(db: Session, model, entry: schemas.CatalogEntryCreate):
+    db_entry = model(**entry.model_dump())
+    db.add(db_entry)
+    db.commit()
+    db.refresh(db_entry)
+    return db_entry
+
+
+def delete_catalog_entry(db: Session, model, entry_id: uuid.UUID):
+    db_entry = db.query(model).filter(model.id == entry_id).first()
+    if not db_entry:
+        return None
+    db.delete(db_entry)
+    db.commit()
+    return db_entry

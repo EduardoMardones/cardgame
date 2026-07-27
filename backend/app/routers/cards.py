@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
-from .. import crud, schemas, models
+from .. import crud, schemas
 from ..database import get_db
 
 router = APIRouter(prefix="/cards", tags=["cards"])
@@ -78,16 +78,7 @@ def delete_card(card_id: uuid.UUID, db: Session = Depends(get_db)):
     if not db_card:
         raise HTTPException(status_code=404, detail="Carta no encontrada")
 
-@router.get("/meta/origins", response_model=list[str])
-def list_origins(db: Session = Depends(get_db)):
-    return crud.get_distinct_origins(db)
-
-
-@router.get("/meta/archetypes", response_model=list[str])
-def list_archetypes(db: Session = Depends(get_db)):
-    return crud.get_distinct_tags(db, models.Card.archetypes)
-
-
-@router.get("/meta/associations", response_model=list[str])
-def list_associations(db: Session = Depends(get_db)):
-    return crud.get_distinct_tags(db, models.Card.associations)
+# Nota: los endpoints que antes vivían acá (/meta/origins, /meta/archetypes,
+# /meta/associations) se movieron a app/routers/catalog.py bajo /catalog/*.
+# Antes derivaban las opciones de las cartas ya creadas; ahora Origen,
+# Arquetipo y Equipo son catálogos propios que se administran aparte.

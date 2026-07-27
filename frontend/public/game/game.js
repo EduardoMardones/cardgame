@@ -201,7 +201,7 @@ function mapDbCardToGameData(dbCard) {
         abilities: Array.isArray(dbCard.abilities) ? dbCard.abilities : [],
         origin: dbCard.origin || null,
         archetypes: dbCard.archetypes || [],
-        associations: dbCard.associations || [],
+        teams: dbCard.teams || [],
         };
 }
 
@@ -398,7 +398,7 @@ function renderPlayerHandCard(data) {
     card.dataset.flavor = data.flavor || '';
     card.dataset.origin = data.origin || '';
     card.dataset.archetypes = JSON.stringify(data.archetypes || []);
-    card.dataset.associations = JSON.stringify(data.associations || []);
+    card.dataset.teams = JSON.stringify(data.teams || []);
 
     const artInner = data.image
         ? `<div class="card-art-img" style="background-image: url('${data.image}'); background-position: ${data.imagePosX ?? 50}% ${data.imagePosY ?? 50}%; transform: scale(${(data.imageScale ?? 100) / 100}); transform-origin: ${data.imagePosX ?? 50}% ${data.imagePosY ?? 50}%;"></div>`
@@ -421,15 +421,15 @@ function renderPlayerHandCard(data) {
         const kwTag = data.keyword !== 'none' ? `<div class="keyword-tag k-${data.keyword}">${keywordLabel(data.keyword)}</div>` : '';
 
         const archetypes = data.archetypes || [];
-        const associations = data.associations || [];
+        const teams = data.teams || [];
         const tagIcons = `
             ${archetypes[0] ? `<div class="tag-icon" title="Arquetipo: ${archetypes[0]}">${archetypeIconSvg(archetypes[0])}</div>` : ''}
-            ${associations[0] ? `<div class="tag-icon" title="Asociación: ${associations[0]}">${associationIconSvg(associations[0])}</div>` : ''}
+            ${teams[0] ? `<div class="tag-icon" title="Equipo: ${teams[0]}">${teamIconSvg(teams[0])}</div>` : ''}
         `;
 
         const originChip = data.origin ? `<span class="chip origin">${data.origin}</span>` : '';
         const archetypeChips = archetypes.map(a => `<span class="chip">${archetypeIconSvg(a)}${a}</span>`).join('');
-        const associationChips = associations.map(a => `<span class="chip">${associationIconSvg(a)}${a}</span>`).join('');
+        const teamChips = teams.map(a => `<span class="chip">${teamIconSvg(a)}${a}</span>`).join('');
 
         card.innerHTML = `
             <div class="card-art">${artInner}</div>
@@ -443,7 +443,7 @@ function renderPlayerHandCard(data) {
 
             <div class="expanded-panel">
                 ${abilitiesFullText ? `<div class="exp-ability">${abilitiesFullText}</div>` : ''}
-                ${(originChip || archetypeChips || associationChips) ? `<div class="exp-chips">${originChip}${archetypeChips}${associationChips}</div>` : ''}
+                ${(originChip || archetypeChips || teamChips) ? `<div class="exp-chips">${originChip}${archetypeChips}${teamChips}</div>` : ''}
                 ${data.flavor ? `<div class="exp-flavor">"${data.flavor}"</div>` : ''}
             </div>
         `;
@@ -486,7 +486,7 @@ const ARCHETYPE_ICONS = {
     "stand user": `<svg viewBox="0 0 24 24" fill="none" stroke="#f3d430" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 22 C6 16 18 16 18 22"/></svg>`,
 };
 
-const ASSOCIATION_ICONS = {
+const TEAM_ICONS = {
     "mugiwaras": `<svg viewBox="0 0 24 24" fill="none" stroke="#bfe0f0" stroke-width="2"><path d="M2 12 a10 6 0 0 1 20 0"/><circle cx="12" cy="12" r="2" fill="#bfe0f0"/></svg>`,
     "crazy diamond": `<svg viewBox="0 0 24 24" fill="none" stroke="#bfe0f0" stroke-width="2"><path d="M12 2 L20 9 L12 22 L4 9 Z"/></svg>`,
 };
@@ -500,8 +500,8 @@ function fallbackIcon(label) {
 function archetypeIconSvg(name) {
     return ARCHETYPE_ICONS[(name || "").toLowerCase()] || fallbackIcon(name);
 }
-function associationIconSvg(name) {
-    return ASSOCIATION_ICONS[(name || "").toLowerCase()] || fallbackIcon(name);
+function teamIconSvg(name) {
+    return TEAM_ICONS[(name || "").toLowerCase()] || fallbackIcon(name);
 }
 
 const TRIGGER_LABELS = {
@@ -615,7 +615,7 @@ function playCardFromElement(cardElement, side) {
     minion.dataset.baseatk = cardElement.dataset.atk;
     minion.dataset.mana = cardElement.dataset.mana;
     minion.dataset.name = cardElement.dataset.name || '';
-    
+
     minion.dataset.image = cardElement.dataset.image || '';
     minion.dataset.imagePosX = cardElement.dataset.imagePosX || 50;
     minion.dataset.imagePosY = cardElement.dataset.imagePosY || 50;
@@ -629,7 +629,7 @@ function playCardFromElement(cardElement, side) {
     minion.dataset.flavor = cardElement.dataset.flavor || '';
     minion.dataset.origin = cardElement.dataset.origin || '';
     minion.dataset.archetypes = cardElement.dataset.archetypes || '[]';
-    minion.dataset.associations = cardElement.dataset.associations || '[]';
+    minion.dataset.teams = cardElement.dataset.teams || '[]';
 
     const artInner = cardElement.dataset.image
         ? `<div class="minion-art-img" style="background-image: url('${cardElement.dataset.image}'); background-position: ${cardElement.dataset.imagePosX || 50}% ${cardElement.dataset.imagePosY || 50}%; transform: scale(${(cardElement.dataset.imageScale || 100) / 100}); transform-origin: ${cardElement.dataset.imagePosX || 50}% ${cardElement.dataset.imagePosY || 50}%;"></div>`
@@ -638,10 +638,10 @@ function playCardFromElement(cardElement, side) {
     const kwTag = keyword !== 'none' ? `<div class="keyword-tag k-${keyword}">${keywordLabel(keyword)}</div>` : '';
 
     const archetypes = JSON.parse(minion.dataset.archetypes || '[]');
-    const associations = JSON.parse(minion.dataset.associations || '[]');
+    const teams = JSON.parse(minion.dataset.teams || '[]');
     const originChip = minion.dataset.origin ? `<span class="chip origin">${minion.dataset.origin}</span>` : '';
     const archetypeChips = archetypes.map(a => `<span class="chip">${archetypeIconSvg(a)}${a}</span>`).join('');
-    const associationChips = associations.map(a => `<span class="chip">${associationIconSvg(a)}${a}</span>`).join('');
+    const teamChips = teams.map(a => `<span class="chip">${teamIconSvg(a)}${a}</span>`).join('');
     const abilitiesFullText = describeAbilities(abilities);
 
     minion.innerHTML = `
@@ -653,7 +653,7 @@ function playCardFromElement(cardElement, side) {
         <div class="expanded-panel minion-panel">
             <div class="exp-name">${minion.dataset.name || 'Esbirro'}</div>
             ${abilitiesFullText ? `<div class="exp-ability">${abilitiesFullText}</div>` : ''}
-            ${(originChip || archetypeChips || associationChips) ? `<div class="exp-chips">${originChip}${archetypeChips}${associationChips}</div>` : ''}
+            ${(originChip || archetypeChips || teamChips) ? `<div class="exp-chips">${originChip}${archetypeChips}${teamChips}</div>` : ''}
             ${minion.dataset.flavor ? `<div class="exp-flavor">"${minion.dataset.flavor}"</div>` : ''}
         </div>
     `;
@@ -968,7 +968,7 @@ function buildTempCardElement(data) {
         el.dataset.flavor = data.flavor || '';
         el.dataset.origin = data.origin || '';
         el.dataset.archetypes = JSON.stringify(data.archetypes || []);
-        el.dataset.associations = JSON.stringify(data.associations || []);
+        el.dataset.teams = JSON.stringify(data.teams || []);
     } else {
         el.dataset.effect = data.effect;
         el.dataset.value = data.value;

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Ability, CardData, Effect, Keyword, SimpleTrigger, SpellEffect } from "../types";
 import { EFFECT_CATALOG, TRIGGER_OPTIONS, defaultAbility } from "../types";
 import { emptyCard } from "../types";
-import { resolveImageUrl, getOrigins, getArchetypes, getAssociations } from "../api";
+import { resolveImageUrl, getOrigins, getArchetypes, getTeams } from "../api";
 
 
 interface Props {
@@ -27,13 +27,13 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
   // Estados para opciones de autocompletado
   const [originOptions, setOriginOptions] = useState<string[]>([]);
   const [archetypeOptions, setArchetypeOptions] = useState<string[]>([]);
-  const [associationOptions, setAssociationOptions] = useState<string[]>([]);
+  const [teamOptions, setTeamOptions] = useState<string[]>([]);
 
   useEffect(() => {
     // Carga de listas al montar
     getOrigins().then(setOriginOptions);
     getArchetypes().then(setArchetypeOptions);
-    getAssociations().then(setAssociationOptions);
+    getTeams().then(setTeamOptions);
   }, []);
 
   useEffect(() => {
@@ -239,12 +239,12 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
           />
 
           <TagPicker
-            label="Asociaciones"
-            values={card.associations ?? []}
-            onChange={(v) => update("associations", v)}
+            label="Equipos"
+            values={card.teams ?? []}
+            onChange={(v) => update("teams", v)}
             max={2}
             placeholder="Ej: mugiwaras"
-            options={associationOptions}
+            options={teamOptions}
           />
 
           <fieldset style={styles.fieldset}>
@@ -403,7 +403,7 @@ export default function CardForm({ initialCard, onSubmit, onCancel }: Props) {
 }
 
 /**
- * Componente TagPicker para Arquetipos y Asociaciones con Autocompletado
+ * Componente TagPicker para Arquetipos y Equipos con Autocompletado
  */
 function TagPicker({
   label, values, onChange, max, placeholder, options = [],
@@ -434,8 +434,8 @@ function TagPicker({
         {values.map((v) => (
           <span key={v} style={styles.tag}>
             {v}
-            <button 
-              type="button" 
+            <button
+              type="button"
               style={styles.tagRemoveBtn}
               onClick={() => onChange(values.filter((x) => x !== v))}
             >
