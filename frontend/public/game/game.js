@@ -1,5 +1,14 @@
 const API_BASE = 'http://localhost:8000';
-const DECK_SIZE = 30;
+
+// Constantes de balance del juego. Tocar acá para ajustar reglas
+// sin tener que buscar números sueltos por el resto del archivo.
+const CONFIG = {
+    DECK_SIZE: 30,       // cartas iniciales del mazo de cada jugador
+    STARTING_HP: 30,     // vida inicial de cada héroe
+    MAX_HAND_SIZE: 10,   // cartas máximas en mano
+    MAX_MINIONS: 7,      // esbirros máximos en el campo por jugador
+    MAX_MANA: 10,        // maná máximo alcanzable
+};
 
 class EventBus {
     constructor() {
@@ -214,13 +223,13 @@ async function loadPlayerDeck() {
         console.warn('No se pudo conectar con el backend de cartas (¿está corriendo en :8000?). Se usará un mazo 100% de prueba.', err);
     }
 
-    const deck = dbCards.slice(0, DECK_SIZE).map(mapDbCardToGameData);
-    while (deck.length < DECK_SIZE) {
+    const deck = dbCards.slice(0, CONFIG.DECK_SIZE).map(mapDbCardToGameData);
+    while (deck.length < CONFIG.DECK_SIZE) {
         deck.push(generateCardData());
     }
 
     state.player.deckCards = shuffle(deck);
-    log(`Mazo armado: ${dbCards.length} carta(s) real(es) + ${DECK_SIZE - Math.min(dbCards.length, DECK_SIZE)} de prueba.`);
+    log(`Mazo armado: ${dbCards.length} carta(s) real(es) + ${CONFIG.DECK_SIZE - Math.min(dbCards.length, CONFIG.DECK_SIZE)} de prueba.`);
 }
 
 const state = {
@@ -229,8 +238,8 @@ const state = {
     gameOver: false,
     selectedAttacker: null,
 
-    player: { maxMana: 1, mana: 1, deck: 30, hp: 26, heroPowerUsed: false, minionCount: 0, handCount: 0, deckCards: [] },
-    enemy:  { maxMana: 1, mana: 1, deck: 30, hp: 30, heroPowerUsed: false, minionCount: 0, handCount: 0, hand: [] }
+    player: { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, deckCards: [] },
+    enemy:  { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, hand: [] }
 };
 
 function log(msg) {
@@ -239,6 +248,16 @@ function log(msg) {
     line.textContent = msg;
     el.prepend(line);
     while (el.children.length > 7) el.removeChild(el.lastChild);
+}
+
+// Pinta en el DOM los valores iniciales que dependen de CONFIG
+// (vida y contador de mazo de ambos héroes). Así el HTML no necesita
+// tener esos números hardcodeados: CONFIG es la única fuente de verdad.
+function renderInitialStats() {
+    document.getElementById('player-hp').innerText = state.player.hp;
+    document.getElementById('enemy-hp').innerText = state.enemy.hp;
+    document.getElementById('deck-count').innerText = `${state.player.deck}/${CONFIG.DECK_SIZE}`;
+    document.getElementById('enemy-deck-count').innerText = `${state.enemy.deck}/${CONFIG.DECK_SIZE}`;
 }
 
 function showOverlay(text) {
@@ -323,7 +342,7 @@ function refreshPlayability() {
     });
     document.getElementById('deck').classList.toggle('disabled', !canPlay || state.player.handCountFull());
 }
-state.player.handCountFull = () => state.player.handCount >= 10;
+state.player.handCountFull = () => state.player.handCount >= CONFIG.MAX_HAND_SIZE;
 
 function refreshEnemyHandFan() {
     const cards = Array.from(document.getElementById('enemy-hand').children);
@@ -336,12 +355,12 @@ function refreshEnemyHandFan() {
 
 function drawCard(side) {
     const p = state[side];
-    if (p.handCount >= 10) { log(side === 'player' ? 'Tu mano está llena.' : 'La mano del rival está llena.'); return; }
+    if (p.handCount >= CONFIG.MAX_HAND_SIZE) { log(side === 'player' ? 'Tu mano está llena.' : 'La mano del rival está llena.'); return; }
     if (p.deck <= 0) { log(side === 'player' ? '¡Tu mazo está vacío!' : 'El mazo rival está vacío.'); return; }
 
     p.deck--;
-    if (side === 'player') document.getElementById('deck-count').innerText = `${p.deck}/30`;
-    else document.getElementById('enemy-deck-count').innerText = `${p.deck}/30`;
+    if (side === 'player') document.getElementById('deck-count').innerText = `${p.deck}/${CONFIG.DECK_SIZE}`;
+    else document.getElementById('enemy-deck-count').innerText = `${p.deck}/${CONFIG.DECK_SIZE}`;
 
     const data = side === 'player' ? (state.player.deckCards.shift() || generateCardData()) : generateCardData();
     addCardToHand(side, data);
@@ -349,7 +368,7 @@ function drawCard(side) {
 
 function addCardToHand(side, data) {
     const p = state[side];
-    if (p.handCount >= 10) { log(side === 'player' ? 'Tu mano está llena.' : 'La mano del rival está llena.'); return false; }
+    if (p.handCount >= CONFIG.MAX_HAND_SIZE) { log(side === 'player' ? 'Tu mano está llena.' : 'La mano del rival está llena.'); return false; }
     p.handCount++;
 
     if (side === 'enemy') {
@@ -575,7 +594,7 @@ function playCardFromElement(cardElement, side) {
         return true;
     }
 
-    if (p.minionCount >= 7) { log('El campo está lleno (máximo 7).'); return false; }
+    if (p.minionCount >= CONFIG.MAX_MINIONS) { log(`El campo está lleno (máximo ${CONFIG.MAX_MINIONS}).`); return false; }
     p.mana -= manaCost;
     p.minionCount++;
     p.handCount--;
@@ -692,7 +711,7 @@ function dealDamageToHero(side, amount) {
 }
 
 function healHero(side, amount) {
-    const cap = side === 'player' ? 30 : 30;
+    const cap = CONFIG.STARTING_HP;
     state[side].hp = Math.min(cap, state[side].hp + amount);
     const hpEl = document.getElementById(side + '-hp');
     hpEl.innerText = state[side].hp;
@@ -729,7 +748,7 @@ function killMinion(minionEl) {
 
 function returnMinionToHand(minionEl) {
     const side = minionEl.dataset.side;
-    if (state[side].handCount >= 10) {
+    if (state[side].handCount >= CONFIG.MAX_HAND_SIZE) {
         log(`${side === 'player' ? 'Tu' : 'La'} mano está llena: no se pudo devolver un esbirro.`);
         return;
     }
@@ -862,7 +881,7 @@ function startPlayerTurn() {
     if (state.gameOver) return;
     state.activePlayer = 'player';
     state.turn++;
-    state.player.maxMana = Math.min(10, state.player.maxMana + 1);
+    state.player.maxMana = Math.min(CONFIG.MAX_MANA, state.player.maxMana + 1);
     state.player.mana = state.player.maxMana;
     state.player.heroPowerUsed = false;
     document.getElementById('player-power').classList.remove('used');
@@ -886,7 +905,7 @@ function endPlayerTurn() {
 
 function runEnemyTurn() {
     if (state.gameOver) return;
-    state.enemy.maxMana = Math.min(10, state.enemy.maxMana + 1);
+    state.enemy.maxMana = Math.min(CONFIG.MAX_MANA, state.enemy.maxMana + 1);
     state.enemy.mana = state.enemy.maxMana;
     state.enemy.heroPowerUsed = false;
     document.querySelectorAll('#enemy-minions .minion-in-play').forEach(m => m.classList.remove('exhausted'));
@@ -914,7 +933,7 @@ function aiPlayCards() {
         for (let i = 0; i < state.enemy.hand.length; i++) {
             const data = state.enemy.hand[i];
             if (data.mana > state.enemy.mana) continue;
-            if (data.type === 'minion' && state.enemy.minionCount >= 7) continue;
+            if (data.type === 'minion' && state.enemy.minionCount >= CONFIG.MAX_MINIONS) continue;
 
             const tempCard = buildTempCardElement(data);
             const success = playCardFromElement(tempCard, 'enemy');
@@ -997,6 +1016,7 @@ function aiAttackPhase() {
 }
 
 (async function init() {
+    renderInitialStats();
     renderManaBar();
     document.getElementById('end-turn').disabled = false;
     await loadPlayerDeck();
