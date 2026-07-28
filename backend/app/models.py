@@ -1,6 +1,9 @@
 import enum
 import uuid
 
+from datetime import datetime  # <-- agregar esta línea
+
+from sqlalchemy import Column, String, Integer, Boolean, Enum, DateTime
 from sqlalchemy import Column, String, Integer, Boolean, Enum, DateTime
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
