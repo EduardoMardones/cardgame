@@ -2,6 +2,11 @@ import type { CardData, CatalogEntry } from "./types";
 
 const BASE_URL = "http://localhost:8000";
 
+export function getAuthHeader(): Record<string, string> {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function fetchCards(): Promise<CardData[]> {
   const res = await fetch(`${BASE_URL}/cards/`);
   if (!res.ok) throw new Error("Error al cargar cartas");
