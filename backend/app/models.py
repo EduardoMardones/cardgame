@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Column, String, Integer, Boolean, Enum
+from sqlalchemy import Column, String, Integer, Boolean, Enum, DateTime
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from .database import Base
@@ -123,3 +123,15 @@ class Team(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False, unique=True)
     icon = Column(String, nullable=True)
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username = Column(String, nullable=False, unique=True)
+    email = Column(String, nullable=False, unique=True)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    packs_available = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
