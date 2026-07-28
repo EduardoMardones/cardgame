@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { CardData } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import type { CardData, CatalogEntry } from "../types";
 import {
   fetchCards, createCard, updateCard, deleteCard, uploadCardImage,
   listOrigins, createOrigin, deleteOrigin,
@@ -8,6 +8,7 @@ import {
 } from "../api";
 import CardForm from "../components/CardForm";
 import CardList from "../components/CardList";
+import CardFilters, { type SortDir, type SortField } from "../components/CardFilters";
 import CatalogManager from "../components/CatalogManager";
 import { Link } from "react-router-dom";
 
@@ -26,6 +27,22 @@ export default function EditorPage() {
   const [editing, setEditing] = useState<CardData | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Catálogos usados para armar las opciones de los filtros. Se cargan
+  // una vez al montar (igual que las cartas); si el usuario agrega un
+  // origen/arquetipo/equipo nuevo en las otras pestañas, se refrescan
+  // solo al volver a entrar a la pestaña "Cartas" (ver loadCatalogs()).
+  const [origins, setOrigins] = useState<CatalogEntry[]>([]);
+  const [archetypes, setArchetypes] = useState<CatalogEntry[]>([]);
+  const [teams, setTeams] = useState<CatalogEntry[]>([]);
+
+  // Filtros y orden de la lista de cartas creadas.
+  const [originFilter, setOriginFilter] = useState("");
+  const [archetypeFilter, setArchetypeFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [cardTypeFilter, setCardTypeFilter] = useState<"all" | "minion" | "spell">("all");
+  const [sortBy, setSortBy] = useState<SortField>("none");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
   async function load() {
     try {
       setCards(await fetchCards());
@@ -35,9 +52,53 @@ export default function EditorPage() {
     }
   }
 
+  async function loadCatalogs() {
+    const [o, a, t] = await Promise.all([listOrigins(), listArchetypes(), listTeams()]);
+    setOrigins(o);
+    setArchetypes(a);
+    setTeams(t);
+  }
+
   useEffect(() => {
     load();
+    loadCatalogs();
   }, []);
+
+  // Al volver a la pestaña "Cartas" refrescamos los catálogos, por si el
+  // usuario creó/borró un origen, arquetipo o equipo mientras estaba en
+  // otra pestaña (así los selects de filtro no quedan desactualizados).
+  useEffect(() => {
+    if (tab === "cards") loadCatalogs();
+  }, [tab]);
+
+  const filteredCards = useMemo(() => {
+    let result = cards.filter((c) => {
+      if (originFilter && c.origin !== originFilter) return false;
+      if (archetypeFilter && !(c.archetypes ?? []).includes(archetypeFilter)) return false;
+      if (teamFilter && !(c.teams ?? []).includes(teamFilter)) return false;
+      if (cardTypeFilter !== "all" && c.card_type !== cardTypeFilter) return false;
+      return true;
+    });
+
+    if (sortBy !== "none") {
+      result = [...result].sort((a, b) => {
+        const av = (a[sortBy] ?? 0) as number;
+        const bv = (b[sortBy] ?? 0) as number;
+        return sortDir === "asc" ? av - bv : bv - av;
+      });
+    }
+
+    return result;
+  }, [cards, originFilter, archetypeFilter, teamFilter, cardTypeFilter, sortBy, sortDir]);
+
+  function resetFilters() {
+    setOriginFilter("");
+    setArchetypeFilter("");
+    setTeamFilter("");
+    setCardTypeFilter("all");
+    setSortBy("none");
+    setSortDir("asc");
+  }
 
   async function handleSubmit(card: CardData, imageFile?: File | null) {
     let saved: CardData;
@@ -92,7 +153,27 @@ export default function EditorPage() {
 
             <div style={{ flex: 1, minWidth: 300 }}>
               <h2 style={{ color: "#fff" }}>Cartas creadas ({cards.length})</h2>
-              <CardList cards={cards} onEdit={setEditing} onDelete={handleDelete} />
+              <CardFilters
+                origins={origins}
+                archetypes={archetypes}
+                teams={teams}
+                originFilter={originFilter}
+                archetypeFilter={archetypeFilter}
+                teamFilter={teamFilter}
+                cardTypeFilter={cardTypeFilter}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onOriginChange={setOriginFilter}
+                onArchetypeChange={setArchetypeFilter}
+                onTeamChange={setTeamFilter}
+                onCardTypeChange={setCardTypeFilter}
+                onSortByChange={setSortBy}
+                onSortDirChange={setSortDir}
+                onReset={resetFilters}
+                resultCount={filteredCards.length}
+                totalCount={cards.length}
+              />
+              <CardList cards={filteredCards} onEdit={setEditing} onDelete={handleDelete} hasAnyCards={cards.length > 0} />
             </div>
           </div>
         </>

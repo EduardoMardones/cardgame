@@ -1,5 +1,3 @@
-const API_BASE = 'http://localhost:8000';
-
 // Constantes de balance del juego. Tocar acá para ajustar reglas
 // sin tener que buscar números sueltos por el resto del archivo.
 const CONFIG = {
@@ -99,6 +97,33 @@ const targetResolver = {
             default: return null;
         }
     },
+    // Los targets "CHOOSE_*" son los que el jugador elige a mano en vez de
+    // que se resuelvan solos (random / fijo). Se identifican por prefijo
+    // para no tener que listarlos uno por uno en cada lugar que pregunta.
+    isManual(targetType) {
+        return typeof targetType === 'string' && targetType.startsWith('CHOOSE_');
+    },
+    // Dado un target manual, arma el pool de elementos que se pueden elegir:
+    // { minions: [...], heroes: ['player'|'enemy', ...] }
+    resolveManualPool(targetType, context) {
+        switch (targetType) {
+            case 'CHOOSE_ENEMY_MINION':
+            case 'CHOOSE_ENEMY_MINIONS':
+                return { minions: this.resolveMinionPool('ENEMY_MINIONS', context), heroes: [] };
+            case 'CHOOSE_OWN_MINION':
+            case 'CHOOSE_OWN_MINIONS':
+                return { minions: this.resolveMinionPool('OWN_MINIONS', context), heroes: [] };
+            case 'CHOOSE_ANY_MINION':
+            case 'CHOOSE_ANY_MINIONS':
+                return { minions: this.resolveMinionPool('ANY_MINIONS', context), heroes: [] };
+            case 'CHOOSE_ANY_ENEMY':
+                return { minions: this.resolveMinionPool('ENEMY_MINIONS', context), heroes: [context.enemySide] };
+            case 'CHOOSE_ANY_OWN':
+                return { minions: this.resolveMinionPool('OWN_MINIONS', context), heroes: [context.owner] };
+            default:
+                return { minions: [], heroes: [] };
+        }
+    },
     resolveMinionPool(poolType, context) {
         const playerMinions = () => Array.from(document.getElementById('player-minions').children);
         const enemyMinions = () => Array.from(document.getElementById('enemy-minions').children);
@@ -115,26 +140,42 @@ const targetResolver = {
     }
 };
 
-abilitySystem.registerEffect('DEAL_DAMAGE', (params, context) => {
-    const target = targetResolver.resolve(params.target, context);
+function applyDealDamage(target, amount, context) {
     if (!target) return;
     if (target === 'player' || target === 'enemy') {
-        dealDamageToHero(target, params.amount);
+        dealDamageToHero(target, amount);
     } else {
-        damageMinion(target, params.amount);
+        damageMinion(target, amount);
     }
-    log(`${context.owner === 'player' ? 'Tu carta activa' : 'La carta rival activa'} una habilidad: ${params.amount} de daño.`);
+    log(`${context.owner === 'player' ? 'Tu carta activa' : 'La carta rival activa'} una habilidad: ${amount} de daño.`);
+}
+
+abilitySystem.registerEffect('DEAL_DAMAGE', (params, context) => {
+    if (targetResolver.isManual(params.target)) {
+        requestManualTarget(params.target, context, (target) => applyDealDamage(target, params.amount, context));
+        return;
+    }
+    const target = targetResolver.resolve(params.target, context);
+    applyDealDamage(target, params.amount, context);
 });
 
-abilitySystem.registerEffect('HEAL', (params, context) => {
-    const target = targetResolver.resolve(params.target || 'OWNER_HERO', context);
+function applyHeal(target, amount, context) {
     if (!target) return;
     if (target === 'player' || target === 'enemy') {
-        healHero(target, params.amount);
+        healHero(target, amount);
     } else {
-        healMinion(target, params.amount);
+        healMinion(target, amount);
     }
-    log(`${context.owner === 'player' ? 'Te curás' : 'El rival se cura'} ${params.amount} por una habilidad.`);
+    log(`${context.owner === 'player' ? 'Te curás' : 'El rival se cura'} ${amount} por una habilidad.`);
+}
+
+abilitySystem.registerEffect('HEAL', (params, context) => {
+    if (targetResolver.isManual(params.target)) {
+        requestManualTarget(params.target, context, (target) => applyHeal(target, params.amount, context));
+        return;
+    }
+    const target = targetResolver.resolve(params.target || 'OWNER_HERO', context);
+    applyHeal(target, params.amount, context);
 });
 
 abilitySystem.registerEffect('DRAW_CARD', (params, context) => {
@@ -148,7 +189,19 @@ abilitySystem.registerEffect('GIVE_CHARGE', (params, context) => {
     if (context.minionEl) context.minionEl.classList.remove('exhausted');
 });
 
+function applyReturnToHand(chosen, context) {
+    chosen.forEach(m => returnMinionToHand(m));
+    if (chosen.length) {
+        log(`${context.owner === 'player' ? 'Devolviste' : 'El rival devuelve'} ${chosen.length} esbirro(s) a la mano por una habilidad.`);
+    }
+}
+
 abilitySystem.registerEffect('RETURN_TO_HAND', (params, context) => {
+    if (targetResolver.isManual(params.target)) {
+        requestManualMinionTargets(params.target, params.amount || 1, context, (chosen) => applyReturnToHand(chosen, context));
+        return;
+    }
+
     const pool = targetResolver.resolveMinionPool(params.target || 'ENEMY_MINIONS', context);
     if (!pool.length) return;
 
@@ -156,10 +209,7 @@ abilitySystem.registerEffect('RETURN_TO_HAND', (params, context) => {
         ? pool
         : shuffle(pool.slice()).slice(0, params.amount || 1);
 
-    chosen.forEach(m => returnMinionToHand(m));
-    if (chosen.length) {
-        log(`${context.owner === 'player' ? 'Devolviste' : 'El rival devuelve'} ${chosen.length} esbirro(s) a la mano por una habilidad.`);
-    }
+    applyReturnToHand(chosen, context);
 });
 
 function resolveImg(path) {
@@ -237,6 +287,7 @@ const state = {
     activePlayer: 'player',
     gameOver: false,
     selectedAttacker: null,
+    pendingAbility: null, // habilidad esperando que el jugador elija un objetivo manualmente
 
     player: { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, deckCards: [] },
     enemy:  { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, hand: [] }
@@ -527,6 +578,13 @@ const TARGET_LABELS = {
     OWN_MINIONS: "a tus esbirros",
     ANY_MINIONS: "a cualquier esbirro",
     ALL_MINIONS: "a todos los esbirros",
+    CHOOSE_ENEMY_MINION: "a un esbirro enemigo (elegís vos)",
+    CHOOSE_ANY_ENEMY: "a algo del rival (elegís vos)",
+    CHOOSE_OWN_MINION: "a un esbirro aliado (elegís vos)",
+    CHOOSE_ANY_OWN: "a algo tuyo (elegís vos)",
+    CHOOSE_ENEMY_MINIONS: "a esbirros enemigos (elegís vos)",
+    CHOOSE_OWN_MINIONS: "a tus esbirros (elegís vos)",
+    CHOOSE_ANY_MINIONS: "a esbirros (elegís vos)",
 };
 
 function describeEffect(effect, params = {}) {
@@ -544,10 +602,15 @@ function describeEffect(effect, params = {}) {
             return "Puede atacar de inmediato.";
         case "RETURN_TO_HAND": {
             const amount = params.amount || 1;
+            if (params.target === "ALL_MINIONS") {
+                return `Devuelve ${TARGET_LABELS[params.target]} a la mano.`;
+            }
+            if (targetResolver.isManual(params.target)) {
+                const who = { CHOOSE_ENEMY_MINIONS: "rival(es) ", CHOOSE_OWN_MINIONS: "tuyo(s) ", CHOOSE_ANY_MINIONS: "" }[params.target] || "";
+                return `Elegís y devolvés ${amount} esbirro(s) ${who}a la mano.`;
+            }
             const targetLabel = TARGET_LABELS[params.target || "ENEMY_MINIONS"] || "";
-            return params.target === "ALL_MINIONS"
-                ? `Devuelve ${targetLabel} a la mano.`
-                : `Devuelve ${amount} esbirro(s) ${targetLabel.replace("a los ", "de los ").replace("a ", "de ")} a la mano.`;
+            return `Devuelve ${amount} esbirro(s) ${targetLabel.replace("a los ", "de los ").replace("a ", "de ")} a la mano.`;
         }
         default:
             return "";
@@ -568,6 +631,7 @@ function drop(e) {
     e.preventDefault();
     document.getElementById('player-minions').classList.remove('drag-over');
     if (state.activePlayer !== 'player' || state.gameOver) return;
+    if (state.pendingAbility) { log('Primero tenés que elegir el objetivo de la habilidad.'); return; }
 
     const cardId = e.dataTransfer.getData('text');
     const cardElement = document.getElementById(cardId);
@@ -924,6 +988,7 @@ function returnMinionToHand(minionEl) {
 }
 
 function onPlayerMinionClick(minion) {
+    if (handleAbilityTargetClick(minion)) return;
     if (state.activePlayer !== 'player' || state.gameOver) return;
     if (minion.classList.contains('exhausted')) { log('Ese esbirro tiene fatiga de invocación.'); return; }
 
@@ -960,7 +1025,114 @@ function clearSelection() {
     highlightTargets(false);
 }
 
+// ============================================================
+// Targeting manual de habilidades (grito de batalla / estertor)
+// ------------------------------------------------------------
+// Cuando una ability tiene un target "CHOOSE_*", en vez de resolverse
+// sola (random) queda "pendiente": se resaltan los objetivos válidos
+// y el efecto se aplica recién cuando el jugador hace click en uno.
+// Si la carta la jugó la IA, no hay quién haga click, así que se
+// resuelve sola (aleatoriamente) como antes.
+// ============================================================
+
+function requestManualTarget(targetType, context, onChosen) {
+    const pool = targetResolver.resolveManualPool(targetType, context);
+    const candidates = [...pool.minions, ...pool.heroes];
+    if (!candidates.length) return; // no había nada válido para elegir, la habilidad no hace nada
+
+    if (context.owner !== 'player') {
+        // La IA no puede "elegir a mano": resuelve random entre los candidatos.
+        const picked = pick(candidates);
+        onChosen(typeof picked === 'string' ? picked : picked);
+        return;
+    }
+
+    const validEls = [...pool.minions, ...pool.heroes.map(side => document.getElementById(side + '-avatar'))];
+    beginTargetingMode(validEls, (el) => onChosen(resolveClickedTarget(el)), 'Elegí un objetivo para la habilidad.');
+}
+
+function requestManualMinionTargets(targetType, amount, context, onChosen) {
+    const pool = targetResolver.resolveManualPool(targetType, context);
+    const candidates = pool.minions;
+    if (!candidates.length) return;
+
+    if (context.owner !== 'player') {
+        const chosen = shuffle(candidates.slice()).slice(0, amount);
+        onChosen(chosen);
+        return;
+    }
+
+    beginMultiTargetingMode(candidates, amount, onChosen, `Elegí ${amount} esbirro(s) para la habilidad.`);
+}
+
+function resolveClickedTarget(el) {
+    if (el.id === 'player-avatar') return 'player';
+    if (el.id === 'enemy-avatar') return 'enemy';
+    return el;
+}
+
+function beginTargetingMode(validEls, onComplete, promptMsg) {
+    clearSelection(); // cancelamos cualquier selección de ataque en curso
+    state.pendingAbility = {
+        multi: false,
+        needed: 1,
+        chosen: [],
+        validEls,
+        onComplete: (el) => { endTargetingMode(); onComplete(el); },
+    };
+    validEls.forEach(el => el && el.classList.add('ability-targetable'));
+    document.getElementById('end-turn').disabled = true;
+    log(promptMsg);
+}
+
+function beginMultiTargetingMode(validEls, amount, onComplete, promptMsg) {
+    clearSelection();
+    state.pendingAbility = {
+        multi: true,
+        needed: Math.min(amount, validEls.length),
+        chosen: [],
+        validEls,
+        onComplete: (chosen) => { endTargetingMode(); onComplete(chosen); },
+    };
+    validEls.forEach(el => el && el.classList.add('ability-targetable'));
+    document.getElementById('end-turn').disabled = true;
+    log(promptMsg);
+}
+
+function endTargetingMode() {
+    if (!state.pendingAbility) return;
+    state.pendingAbility.validEls.forEach(el => el && el.classList.remove('ability-targetable', 'ability-chosen'));
+    state.pendingAbility = null;
+    if (state.activePlayer === 'player' && !state.gameOver) {
+        document.getElementById('end-turn').disabled = false;
+    }
+}
+
+// Se llama al principio de cualquier click sobre esbirro/héroe. Si hay
+// una habilidad esperando target, absorbe el click y devuelve true
+// (para que el handler normal de ataque/etc. no siga procesando).
+function handleAbilityTargetClick(el) {
+    const pending = state.pendingAbility;
+    if (!pending) return false;
+    if (!pending.validEls.includes(el)) return true; // click fuera de los objetivos válidos: se ignora
+
+    if (!pending.multi) {
+        pending.onComplete(el);
+        return true;
+    }
+
+    if (!pending.chosen.includes(el)) {
+        pending.chosen.push(el);
+        el.classList.add('ability-chosen');
+    }
+    if (pending.chosen.length >= pending.needed) {
+        pending.onComplete(pending.chosen.slice());
+    }
+    return true;
+}
+
 function onEnemyMinionClick(target) {
+    if (handleAbilityTargetClick(target)) return;
     if (!state.selectedAttacker || state.activePlayer !== 'player') return;
     if (enemyHasTaunt() && target.dataset.keyword !== 'taunt') { log('¡Debes atacar a un esbirro con Provocar primero!'); return; }
     const attacker = document.getElementById(state.selectedAttacker);
@@ -970,12 +1142,21 @@ function onEnemyMinionClick(target) {
 }
 
 document.getElementById('enemy-avatar').addEventListener('click', () => {
+    const el = document.getElementById('enemy-avatar');
+    if (handleAbilityTargetClick(el)) return;
     if (!state.selectedAttacker || state.activePlayer !== 'player' || state.gameOver) return;
     if (enemyHasTaunt()) { log('¡Debes atacar a un esbirro con Provocar primero!'); return; }
     const attacker = document.getElementById(state.selectedAttacker);
     if (!attacker) return;
     resolveHeroAttack(attacker, 'enemy');
     clearSelection();
+});
+
+// El propio avatar no tiene otro uso hoy (no te podés atacar a vos mismo),
+// pero necesita un listener para poder ser objetivo de una habilidad tipo
+// CHOOSE_ANY_OWN (ej. un daño/curación que el jugador puede tirarse a sí mismo).
+document.getElementById('player-avatar').addEventListener('click', () => {
+    handleAbilityTargetClick(document.getElementById('player-avatar'));
 });
 
 function resolveHeroAttack(attackerEl, targetSide) {
@@ -1027,6 +1208,7 @@ function disableAll() {
 
 function useHeroPower() {
     if (state.activePlayer !== 'player' || state.gameOver) return;
+    if (state.pendingAbility) { log('Primero tenés que elegir el objetivo de la habilidad.'); return; }
     const btn = document.getElementById('player-power');
     if (state.player.heroPowerUsed) { log('Ya usaste tu poder de héroe este turno.'); return; }
     if (state.player.mana < 2) { log('Necesitas 2 de maná para tu poder de héroe.'); return; }
@@ -1056,6 +1238,7 @@ function startPlayerTurn() {
 
 function endPlayerTurn() {
     if (state.activePlayer !== 'player' || state.gameOver) return;
+    if (state.pendingAbility) { log('Primero tenés que elegir el objetivo de la habilidad.'); return; }
     clearSelection();
     document.getElementById('end-turn').disabled = true;
     state.activePlayer = 'enemy';

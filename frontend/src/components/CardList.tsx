@@ -5,11 +5,16 @@ interface Props {
   cards: CardData[];
   onEdit: (card: CardData) => void;
   onDelete: (id: string) => void;
+  hasAnyCards?: boolean; // true si existen cartas pero los filtros no matchean ninguna
 }
 
-export default function CardList({ cards, onEdit, onDelete }: Props) {
+export default function CardList({ cards, onEdit, onDelete, hasAnyCards = false }: Props) {
   if (cards.length === 0) {
-    return <p style={{ color: "#aaa" }}>Todavía no creaste ninguna carta.</p>;
+    return (
+      <p style={{ color: "#aaa" }}>
+        {hasAnyCards ? "Ninguna carta coincide con los filtros." : "Todavía no creaste ninguna carta."}
+      </p>
+    );
   }
 
   return (
