@@ -179,3 +179,22 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None
+
+# --- Colección ---
+
+class CollectionEntry(BaseModel):
+    card_id: uuid.UUID
+    quantity: int
+    card: CardOut
+
+    class Config:
+        from_attributes = True
+
+
+class ClaimOriginRequest(BaseModel):
+    origin_id: uuid.UUID
+
+
+class OpenPackResult(BaseModel):
+    cards: list[CardOut]
+    packs_remaining: int

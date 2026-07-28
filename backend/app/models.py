@@ -1,12 +1,9 @@
 import enum
 import uuid
-
-from datetime import datetime  # <-- agregar esta línea
-
-from sqlalchemy import Column, String, Integer, Boolean, Enum, DateTime
-from sqlalchemy import Column, String, Integer, Boolean, Enum, DateTime
+from datetime import datetime
+from sqlalchemy import Column, String, Integer, Boolean, Enum, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-
+from sqlalchemy.orm import relationship
 from .database import Base
 
 
@@ -138,3 +135,31 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     packs_available = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+    collection = relationship("UserCollection", back_populates="user")
+
+
+# --- Colección ---
+
+class UserCollection(Base):
+    __tablename__ = "user_collections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    card_id = Column(UUID(as_uuid=True), ForeignKey("cards.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Integer, default=1, nullable=False)
+
+    user = relationship("User", back_populates="collection")
+    card = relationship("Card")
+
+    __table_args__ = (UniqueConstraint("user_id", "card_id", name="uq_user_card"),)
+
+
+class ClaimLog(Base):
+    __tablename__ = "claim_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    origin_id = Column(UUID(as_uuid=True), ForeignKey("origins.id", ondelete="CASCADE"), nullable=False)
+    claimed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("user_id", "origin_id", name="uq_user_origin_claim"),)
