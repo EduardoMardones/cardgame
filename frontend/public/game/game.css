@@ -99,8 +99,180 @@
     }
     .minion-in-play.selected:hover { transform: translateY(-10px) scale(2.17); }
     @keyframes spawn { from { transform: scale(0); } to { transform: scale(1); } }
-    .minion-in-play.dying { animation: dying 0.35s forwards; pointer-events: none; }
-    @keyframes dying { to { transform: scale(0) rotate(30deg); opacity: 0; } }
+
+    /* ============================================================
+       ANIMACIÓN DE ATAQUE (estilo Hearthstone)
+       ============================================================
+       El esbirro hace un "dash" hacia el objetivo, golpea, y rebota
+       de vuelta. translateX/Y se calculan en JS según posición relativa.
+    ============================================================ */
+    @keyframes attackDash {
+        /* --- WINDUP: retrocede y se infla, como tensando el cuerpo --- */
+        0%   { transform: translate(0, 0) scale(1); }
+        18%  { transform: translate(
+                    calc(var(--dash-x) * -0.18),
+                    calc(var(--dash-y) * -0.18)
+               ) scale(1.22); }
+        /* --- RELEASE: pausa brevísima en el punto de máxima tensión --- */
+        26%  { transform: translate(
+                    calc(var(--dash-x) * -0.18),
+                    calc(var(--dash-y) * -0.18)
+               ) scale(1.25); }
+        /* --- DASH: sale disparado al objetivo --- */
+        52%  { transform: translate(var(--dash-x), var(--dash-y)) scale(1.1); }
+        /* --- IMPACTO: aplastado un frame contra el objetivo --- */
+        58%  { transform: translate(
+                    calc(var(--dash-x) * 0.88),
+                    calc(var(--dash-y) * 0.88)
+               ) scale(0.92); }
+        /* --- REBOTE: vuelve un poco pasado de largo hacia atrás --- */
+        75%  { transform: translate(
+                    calc(var(--dash-x) * -0.08),
+                    calc(var(--dash-y) * -0.08)
+               ) scale(0.97); }
+        /* --- REPOSO --- */
+        100% { transform: translate(0, 0) scale(1); }
+    }
+    .minion-in-play.attacking {
+        /* Más lenta para que el windup se lea bien */
+        animation: attackDash 0.65s ease-in-out forwards;
+        z-index: 300;
+        pointer-events: none;
+        filter: none !important;
+    }
+
+    /* Sacudón al recibir daño */
+    @keyframes takeDamageShake {
+        0%   { transform: translate(0, 0) rotate(0deg); }
+        15%  { transform: translate(-6px, -3px) rotate(-4deg); }
+        30%  { transform: translate(6px, 3px) rotate(4deg); }
+        45%  { transform: translate(-5px, 2px) rotate(-3deg); }
+        60%  { transform: translate(4px, -2px) rotate(2deg); }
+        75%  { transform: translate(-2px, 1px) rotate(-1deg); }
+        100% { transform: translate(0, 0) rotate(0deg); }
+    }
+    .minion-in-play.taking-damage {
+        animation: takeDamageShake 0.35s ease-out forwards;
+        pointer-events: none;
+    }
+
+    /* Viñeta roja que aparece desde el borde del esbirro hacia adentro */
+    @keyframes minionVignetteIn {
+        0%   { opacity: 0; }
+        15%  { opacity: 1; }
+        100% { opacity: 0; }
+    }
+    .minion-in-play.damage-flash::after {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        background: radial-gradient(circle, transparent 30%, rgba(220, 30, 30, 0.85) 100%);
+        animation: minionVignetteIn 0.45s ease-out forwards;
+        pointer-events: none;
+        z-index: 20;
+    }
+
+    /* ---- HÉROE: shake del avatar al recibir daño ---- */
+    @keyframes heroShake {
+        0%   { transform: translate(0, 0) rotate(0deg); }
+        12%  { transform: translate(-7px, -3px) rotate(-3deg); }
+        28%  { transform: translate(7px, 3px) rotate(3deg); }
+        44%  { transform: translate(-5px, 2px) rotate(-2deg); }
+        62%  { transform: translate(4px, -2px) rotate(1.5deg); }
+        78%  { transform: translate(-2px, 1px) rotate(-0.8deg); }
+        100% { transform: translate(0, 0) rotate(0deg); }
+    }
+    .hero-avatar.taking-damage {
+        animation: heroShake 0.4s ease-out forwards;
+    }
+
+    /* Viñeta roja sobre el avatar del héroe */
+    @keyframes heroVignetteIn {
+        0%   { opacity: 0; }
+        10%  { opacity: 1; }
+        100% { opacity: 0; }
+    }
+    .hero-avatar.damage-flash::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: radial-gradient(circle, transparent 20%, rgba(220, 30, 30, 0.9) 100%);
+        animation: heroVignetteIn 0.55s ease-out forwards;
+        pointer-events: none;
+        z-index: 10;
+    }
+
+    /* ============================================================
+       ANIMACIÓN DE MUERTE (estilo Hearthstone)
+       Los fragmentos explotan hacia afuera desde el centro.
+       Usamos un contenedor con partículas generadas desde JS.
+    ============================================================ */
+
+    /* El esbirro se desvanece y colapsa durante la explosión */
+    @keyframes minionDie {
+        0%   { transform: scale(1); opacity: 1; filter: brightness(1); }
+        15%  { transform: scale(1.2); opacity: 1;   filter: brightness(2.5) saturate(0); }
+        40%  { transform: scale(0.85); opacity: 0.6; filter: brightness(1.5) saturate(0); }
+        100% { transform: scale(0); opacity: 0; filter: brightness(3) saturate(0); }
+    }
+    .minion-in-play.dying {
+        animation: minionDie 0.5s ease-in forwards;
+        pointer-events: none;
+        z-index: 400;
+    }
+
+    /* Contenedor de partículas de muerte (se añade al campo de batalla) */
+    .death-burst-container {
+        position: absolute;
+        pointer-events: none;
+        z-index: 500;
+        width: 0; height: 0;
+    }
+
+    /* Fragmento individual */
+    .death-particle {
+        position: absolute;
+        width: 10px; height: 10px;
+        border-radius: 2px;
+        transform-origin: center;
+        animation: particleFly var(--dur) ease-out forwards;
+        background: var(--particle-color, #c3a05b);
+        box-shadow: 0 0 6px var(--particle-color, #c3a05b);
+    }
+
+    @keyframes particleFly {
+        0% {
+            transform: translate(0, 0) rotate(0deg) scale(1);
+            opacity: 1;
+        }
+        20% {
+            opacity: 1;
+        }
+        100% {
+            transform:
+                translate(var(--fly-x), var(--fly-y))
+                rotate(var(--spin))
+                scale(0);
+            opacity: 0;
+        }
+    }
+
+    /* Destello dorado central al morir */
+    .death-flash {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff8 0%, #f3d43066 40%, transparent 70%);
+        animation: deathFlash 0.35s ease-out forwards;
+        pointer-events: none;
+        z-index: 499;
+    }
+    @keyframes deathFlash {
+        0%   { transform: scale(0); opacity: 1; }
+        40%  { transform: scale(1.5); opacity: 0.9; }
+        100% { transform: scale(2.5); opacity: 0; }
+    }
 
     .minion-art {
         position: absolute; inset: 0; border-radius: 50%; overflow: hidden; z-index: 1;
@@ -208,6 +380,14 @@
     opacity: 1;
     transform: translate(-50%, 100%) scale(0.645);
 }
+/* Ocultar expanded panel durante animaciones de combate */
+.minion-in-play.attacking .expanded-panel,
+.minion-in-play.taking-damage .expanded-panel,
+.minion-in-play.dying .expanded-panel {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .exp-name {
     font-size: 11px; font-weight: bold; color: #f3d430; text-align: center;
     margin-bottom: 6px; text-shadow: 0 1px 2px #000;

@@ -250,9 +250,6 @@ function log(msg) {
     while (el.children.length > 7) el.removeChild(el.lastChild);
 }
 
-// Pinta en el DOM los valores iniciales que dependen de CONFIG
-// (vida y contador de mazo de ambos héroes). Así el HTML no necesita
-// tener esos números hardcodeados: CONFIG es la única fuente de verdad.
 function renderInitialStats() {
     document.getElementById('player-hp').innerText = state.player.hp;
     document.getElementById('enemy-hp').innerText = state.enemy.hp;
@@ -707,6 +704,17 @@ function dealDamageToHero(side, amount) {
     hpEl.innerText = state[side].hp;
     hpEl.classList.add('hit');
     setTimeout(() => hpEl.classList.remove('hit'), 300);
+
+    // Shake + viñeta roja en el avatar del héroe
+    const avatar = document.getElementById(side + '-avatar');
+    avatar.classList.remove('taking-damage', 'damage-flash');
+    void avatar.offsetWidth; // forzar reflow para reiniciar la animación si ya corría
+    avatar.classList.add('taking-damage', 'damage-flash');
+    avatar.addEventListener('animationend', function handler() {
+        avatar.removeEventListener('animationend', handler);
+        avatar.classList.remove('taking-damage', 'damage-flash');
+    }, { once: true });
+
     checkWinLose();
 }
 
@@ -723,6 +731,8 @@ function damageMinion(minionEl, amount) {
     const newHp = parseInt(minionEl.dataset.hp) - amount;
     minionEl.dataset.hp = newHp;
     minionEl.querySelector('.hp-value').innerText = newHp;
+    // Animación de daño recibido
+    triggerTakeDamageAnim(minionEl);
     if (newHp <= 0) killMinion(minionEl);
 }
 
@@ -733,9 +743,140 @@ function healMinion(minionEl, amount) {
     minionEl.querySelector('.hp-value').innerText = newHp;
 }
 
+// ============================================================
+// ANIMACIONES DE COMBATE
+// ============================================================
+
+/**
+ * Calcula el vector de desplazamiento del atacante hacia el objetivo
+ * y aplica la animación de "dash". Devuelve una Promise que se resuelve
+ * cuando la animación termina.
+ */
+// Duración total de la animación de ataque en ms (debe coincidir con el CSS)
+const ATTACK_ANIM_DURATION_MS = 650;
+// Porcentaje de la animación en que el atacante toca al objetivo (keyframe 52%)
+const ATTACK_IMPACT_PCT = 0.52;
+
+function playAttackAnimation(attackerEl, targetEl) {
+    return new Promise(resolve => {
+        const aRect = attackerEl.getBoundingClientRect();
+        const tRect = targetEl.getBoundingClientRect();
+
+        const aCx = aRect.left + aRect.width  / 2;
+        const aCy = aRect.top  + aRect.height / 2;
+        const tCx = tRect.left + tRect.width  / 2;
+        const tCy = tRect.top  + tRect.height / 2;
+
+        const dashX = (tCx - aCx) * 0.85;
+        const dashY = (tCy - aCy) * 0.85;
+
+        attackerEl.style.setProperty('--dash-x', `${dashX}px`);
+        attackerEl.style.setProperty('--dash-y', `${dashY}px`);
+
+        attackerEl.classList.remove('attacking');
+        void attackerEl.offsetWidth;
+        attackerEl.classList.add('attacking');
+
+        // Resolvemos en el momento del impacto para que el daño y el shake
+        // ocurran justo cuando el atacante toca al objetivo, no al volver
+        const impactDelay = ATTACK_ANIM_DURATION_MS * ATTACK_IMPACT_PCT;
+        setTimeout(resolve, impactDelay);
+
+        // Limpiamos la clase al terminar la animación completa (el rebote de vuelta)
+        attackerEl.addEventListener('animationend', function handler() {
+            attackerEl.removeEventListener('animationend', handler);
+            attackerEl.classList.remove('attacking');
+        }, { once: true });
+    });
+}
+
+/**
+ * Sacude el esbirro que recibe el golpe y le aplica un flash rojo.
+ */
+function triggerTakeDamageAnim(minionEl) {
+    if (!minionEl || !document.body.contains(minionEl)) return;
+
+    minionEl.classList.remove('taking-damage', 'damage-flash');
+    void minionEl.offsetWidth;
+    minionEl.classList.add('taking-damage', 'damage-flash');
+
+    // El shake (taking-damage) dura 0.35s; la viñeta (::after via damage-flash) dura 0.45s.
+    // Limpiamos ambas clases cuando termina la más larga.
+    setTimeout(() => {
+        minionEl.classList.remove('taking-damage', 'damage-flash');
+    }, 460);
+}
+
+/**
+ * Genera partículas que explotan desde el centro del esbirro muerto,
+ * imita los fragmentos de carta de Hearthstone.
+ */
+function spawnDeathParticles(minionEl) {
+    const rect = minionEl.getBoundingClientRect();
+    const cx = rect.left + rect.width  / 2;
+    const cy = rect.top  + rect.height / 2;
+
+    // Colores para las partículas: dorado, naranja y blanco
+    const colors = ['#f3d430', '#c3a05b', '#ff9900', '#fff8e1', '#ffffff', '#ff6600'];
+
+    // Número de fragmentos
+    const count = 14;
+
+    for (let i = 0; i < count; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'death-particle';
+
+        // Tamaño variable
+        const size = 6 + Math.random() * 8;
+        // Ángulo y distancia de vuelo aleatorios
+        const angle = (Math.PI * 2 * i / count) + (Math.random() - 0.5) * 0.8;
+        const dist  = 50 + Math.random() * 70;
+        const flyX  = Math.cos(angle) * dist;
+        const flyY  = Math.sin(angle) * dist;
+        const spin  = (Math.random() * 720 - 360) + 'deg';
+        const dur   = (0.4 + Math.random() * 0.35) + 's';
+        const color = colors[Math.floor(Math.random() * colors.length)];
+
+        particle.style.cssText = `
+            width: ${size}px;
+            height: ${size}px;
+            left: ${cx - size / 2}px;
+            top: ${cy - size / 2}px;
+            position: fixed;
+            --fly-x: ${flyX}px;
+            --fly-y: ${flyY}px;
+            --spin: ${spin};
+            --dur: ${dur};
+            --particle-color: ${color};
+            border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+        `;
+
+        document.body.appendChild(particle);
+
+        // Limpiamos la partícula al terminar
+        particle.addEventListener('animationend', () => particle.remove(), { once: true });
+    }
+
+    // Destello central
+    const flash = document.createElement('div');
+    flash.className = 'death-flash';
+    flash.style.cssText = `
+        width: ${rect.width}px;
+        height: ${rect.height}px;
+        left: ${rect.left}px;
+        top: ${rect.top}px;
+        position: fixed;
+    `;
+    document.body.appendChild(flash);
+    flash.addEventListener('animationend', () => flash.remove(), { once: true });
+}
+
+// ============================================================
+// COMBATE — versiones con animaciones
+// ============================================================
+
 function killMinion(minionEl) {
     const side = minionEl.dataset.side;
-    minionEl.classList.add('dying');
     state[side].minionCount--;
 
     const enemySide = side === 'player' ? 'enemy' : 'player';
@@ -743,7 +884,15 @@ function killMinion(minionEl) {
     abilitySystem.unregisterCard(minionEl.id);
 
     if (state.selectedAttacker === minionEl.id) clearSelection();
-    setTimeout(() => minionEl.remove(), 350);
+
+    // Disparamos las partículas antes de que empiece la animación de muerte
+    spawnDeathParticles(minionEl);
+
+    // Reemplazamos la clase dying original con la nueva animación
+    minionEl.classList.add('dying');
+    setTimeout(() => {
+        if (document.body.contains(minionEl)) minionEl.remove();
+    }, 500);
 }
 
 function returnMinionToHand(minionEl) {
@@ -831,8 +980,14 @@ document.getElementById('enemy-avatar').addEventListener('click', () => {
 
 function resolveHeroAttack(attackerEl, targetSide) {
     const dmg = parseInt(attackerEl.dataset.atk);
-    dealDamageToHero(targetSide, dmg);
-    if (attackerEl.dataset.keyword === 'lifesteal') healHero(attackerEl.dataset.side, dmg);
+    const targetEl = document.getElementById(targetSide + '-avatar');
+
+    // Animación de ataque y luego aplicamos el daño
+    playAttackAnimation(attackerEl, targetEl).then(() => {
+        dealDamageToHero(targetSide, dmg);
+        if (attackerEl.dataset.keyword === 'lifesteal') healHero(attackerEl.dataset.side, dmg);
+    });
+
     attackerEl.classList.add('exhausted');
     log(`${attackerEl.dataset.side === 'player' ? 'Atacaste' : 'El rival ataca'} al héroe ${targetSide === 'player' ? 'propio' : 'rival'} por ${dmg}.`);
 }
@@ -841,12 +996,18 @@ function resolveMinionCombat(attackerEl, defenderEl) {
     const atkDmg = parseInt(attackerEl.dataset.atk);
     const defDmg = parseInt(defenderEl.dataset.atk);
 
-    damageMinion(defenderEl, atkDmg);
-    if (document.body.contains(attackerEl) && !attackerEl.classList.contains('dying')) {
-        damageMinion(attackerEl, defDmg);
-    }
-    if (attackerEl.dataset.keyword === 'lifesteal') healHero(attackerEl.dataset.side, atkDmg);
-    if (defenderEl.dataset.keyword === 'lifesteal' && document.body.contains(defenderEl)) healHero(defenderEl.dataset.side, defDmg);
+    // Iniciamos la animación del atacante hacia el defensor
+    playAttackAnimation(attackerEl, defenderEl).then(() => {
+        // Aplicamos el daño solo después de que el dash llega al objetivo
+        damageMinion(defenderEl, atkDmg);
+        if (document.body.contains(attackerEl) && !attackerEl.classList.contains('dying')) {
+            damageMinion(attackerEl, defDmg);
+        }
+        if (attackerEl.dataset.keyword === 'lifesteal') healHero(attackerEl.dataset.side, atkDmg);
+        if (defenderEl.dataset.keyword === 'lifesteal' && document.body.contains(defenderEl)) {
+            healHero(defenderEl.dataset.side, defDmg);
+        }
+    });
 
     attackerEl.classList.add('exhausted');
     log(`Combate de esbirros: ${atkDmg} vs ${defDmg} de daño intercambiado.`);
