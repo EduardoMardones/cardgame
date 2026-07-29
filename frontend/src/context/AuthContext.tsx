@@ -11,6 +11,7 @@ interface AuthContextType {
   login: (usernameOrEmail: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -72,6 +73,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
   }
 
+  async function refreshUser() {
+    if (!token) return;
+    try {
+      const res = await fetch(`${BASE_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setUser((await res.json()) as User);
+    } catch {
+      // silencioso: si falla, se mantiene el user actual
+    }
+  }
+
+
   async function register(username: string, email: string, password: string) {
     const res = await fetch(`${BASE_URL}/auth/register`, {
       method: "POST",
@@ -109,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        refreshUser
       }}
     >
       {children}

@@ -223,3 +223,15 @@ def _validate_deck_cards(
                     f"No tienes suficientes copias de '{name}' "
                     f"(necesitas {item.quantity}, tienes {owned})"
                 )
+
+# --- Resultado de partida ---
+
+def register_game_result(db: Session, user: models.User, deck: models.Deck, result: str) -> tuple[bool, int]:
+    """Aplica las recompensas de fin de partida. Devuelve (se_otorgo_sobre, packs_available)."""
+    pack_awarded = False
+    if deck.mode == models.DeckMode.normal and result == "win":
+        user.packs_available += 1
+        pack_awarded = True
+        db.commit()
+        db.refresh(user)
+    return pack_awarded, user.packs_available

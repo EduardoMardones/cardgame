@@ -120,7 +120,7 @@ export async function getTeams(): Promise<string[]> {
 }
 
 import type {
-  Deck, DeckSummary, DeckCardInput, DeckMode, CollectionEntry,
+  Deck, DeckCardInput, DeckMode, CollectionEntry,
 } from "./types";
 
 function authJsonHeaders(): Record<string, string> {
@@ -159,7 +159,7 @@ export async function openPack() {
 }
 
 // --- Mazos ---
-export async function fetchMyDecks(): Promise<DeckSummary[]> {
+export async function fetchMyDecks(): Promise<Deck[]> {
   const res = await fetch(`${BASE_URL}/decks/`, { headers: getAuthHeader() });
   return handleJson(res, "Error al cargar tus mazos");
 }
@@ -193,4 +193,17 @@ export async function deleteDeck(id: string): Promise<void> {
     headers: getAuthHeader(),
   });
   if (!res.ok) throw new Error("Error al borrar el mazo");
+}
+
+// --- Resultado de partida ---
+export async function reportGameResult(
+  deckId: string,
+  result: "win" | "lose",
+): Promise<{ packs_available: number; pack_awarded: boolean }> {
+  const res = await fetch(`${BASE_URL}/game/result`, {
+    method: "POST",
+    headers: authJsonHeaders(),
+    body: JSON.stringify({ deck_id: deckId, result }),
+  });
+  return handleJson(res, "Error al reportar el resultado de la partida");
 }

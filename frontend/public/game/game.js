@@ -1,3 +1,14 @@
+// --- Config de conexión y parámetros de la URL (Paso 6.2) ---
+const API_BASE = 'http://localhost:8000';
+
+const urlParams = new URLSearchParams(window.location.search);
+const DECK_ID = urlParams.get('deckId');   // mazo elegido en DeckSelectPage
+const AUTH_TOKEN = urlParams.get('token'); // JWT del usuario logueado
+
+function authHeaders() {
+    return AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {};
+}
+
 // Constantes de balance del juego. Tocar acá para ajustar reglas
 // sin tener que buscar números sueltos por el resto del archivo.
 const CONFIG = {
@@ -263,32 +274,82 @@ function shuffle(arr) {
     return arr;
 }
 
-async function loadPlayerDeck() {
-    let dbCards = [];
+async function fetchDeckCards() {
+    // Modo Paso 6: cargar el mazo elegido por el usuario (GET /decks/me/{id})
+    if (!DECK_ID) return null;
     try {
-        const res = await fetch(`${API_BASE}/cards/`);
-        if (res.ok) dbCards = await res.json();
-        else console.warn('El backend respondió con error al pedir /cards/');
+        const res = await fetch(`${API_BASE}/decks/${DECK_ID}`, { headers: authHeaders() });
+        if (!res.ok) {
+            console.warn('No se pudo cargar el mazo seleccionado, se usará mazo de prueba.');
+            return null;
+        }
+        const deck = await res.json();
+        state.deckMode = deck.mode; // 'free' | 'normal' — se usa al reportar resultado
+
+        // Expande quantity: si una carta tiene quantity=2, aparece 2 veces en el mazo
+        const cards = [];
+        (deck.cards || []).forEach((entry) => {
+            for (let i = 0; i < entry.quantity; i++) cards.push(mapDbCardToGameData(entry.card));
+        });
+        return cards;
     } catch (err) {
-        console.warn('No se pudo conectar con el backend de cartas (¿está corriendo en :8000?). Se usará un mazo 100% de prueba.', err);
+        console.warn('Error al cargar el mazo seleccionado:', err);
+        return null;
     }
-
-    const deck = dbCards.slice(0, CONFIG.DECK_SIZE).map(mapDbCardToGameData);
-    while (deck.length < CONFIG.DECK_SIZE) {
-        deck.push(generateCardData());
-    }
-
-    state.player.deckCards = shuffle(deck);
-    log(`Mazo armado: ${dbCards.length} carta(s) real(es) + ${CONFIG.DECK_SIZE - Math.min(dbCards.length, CONFIG.DECK_SIZE)} de prueba.`);
 }
+
+async function fetchCatalogCards() {
+    try {
+        const res = await fetch(`${API_BASE}/cards/`, { headers: authHeaders() });
+        if (res.ok) return (await res.json()).map(mapDbCardToGameData);
+    } catch (err) {
+        console.warn('No se pudo conectar con el backend de cartas (¿está corriendo en :8000?).', err);
+    }
+    return [];
+}
+
+async function loadPlayerDeck() {
+    let deckCards = await fetchDeckCards();
+
+    if (!deckCards) {
+        // Fallback: sin deckId (juego suelto desde game.html) o el mazo no cargó.
+        // Se mantiene el comportamiento viejo: cartas reales del catálogo + relleno de prueba.
+        const catalogCards = await fetchCatalogCards();
+        deckCards = catalogCards.slice(0, CONFIG.DECK_SIZE);
+        log(`Mazo armado: ${catalogCards.length} carta(s) real(es) del catálogo.`);
+    } else {
+        log(`Mazo cargado: "${state.deckMode === 'normal' ? 'modo normal' : 'modo libre'}", ${deckCards.length} carta(s).`);
+    }
+
+    while (deckCards.length < CONFIG.DECK_SIZE) {
+        deckCards.push(generateCardData());
+    }
+    if (deckCards.length > CONFIG.DECK_SIZE) {
+        deckCards = deckCards.slice(0, CONFIG.DECK_SIZE);
+    }
+
+    state.player.deckCards = shuffle(deckCards);
+}
+
+async function loadEnemyDeck() {
+    // Paso 6.2: el mazo de la IA se arma al azar del catálogo global,
+    // con relleno de cartas de prueba si el catálogo tiene pocas cartas.
+    const catalogCards = await fetchCatalogCards();
+    let deckCards = shuffle(catalogCards.slice()).slice(0, CONFIG.DECK_SIZE);
+    while (deckCards.length < CONFIG.DECK_SIZE) {
+        deckCards.push(generateCardData());
+    }
+    state.enemy.deckCards = shuffle(deckCards);
+}
+
 
 const state = {
     turn: 1,
     activePlayer: 'player',
     gameOver: false,
     selectedAttacker: null,
-    pendingAbility: null, // habilidad esperando que el jugador elija un objetivo manualmente
-
+  pendingAbility: null,
+  deckMode: 'free',
     player: { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, deckCards: [] },
     enemy:  { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, hand: [] }
 };
@@ -410,7 +471,7 @@ function drawCard(side) {
     if (side === 'player') document.getElementById('deck-count').innerText = `${p.deck}/${CONFIG.DECK_SIZE}`;
     else document.getElementById('enemy-deck-count').innerText = `${p.deck}/${CONFIG.DECK_SIZE}`;
 
-    const data = side === 'player' ? (state.player.deckCards.shift() || generateCardData()) : generateCardData();
+    const data = p.deckCards.shift() || generateCardData();
     addCardToHand(side, data);
 }
 
@@ -1363,9 +1424,43 @@ function aiAttackPhase() {
     renderInitialStats();
     renderManaBar();
     document.getElementById('end-turn').disabled = false;
-    await loadPlayerDeck();
+    await Promise.all([loadPlayerDeck(), loadEnemyDeck()]);
     document.getElementById('loading-msg').style.display = 'none';
     for (let i = 0; i < 3; i++) setTimeout(() => drawCard('player'), i * 200);
     for (let i = 0; i < 3; i++) setTimeout(() => drawCard('enemy'), i * 200);
     log('¡Comienza la partida! Turno 1 - tu turno.');
 })();
+
+async function reportGameResult(result) {
+    if (!DECK_ID || !AUTH_TOKEN) return; // partida suelta sin mazo/usuario: no hay nada que reportar
+    try {
+        const res = await fetch(`${API_BASE}/game/result`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ deck_id: DECK_ID, result }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.pack_awarded) log('¡Ganaste un sobre! Volvé al menú para abrirlo.');
+        }
+    } catch (err) {
+        console.warn('No se pudo reportar el resultado de la partida.', err);
+    }
+}
+
+function checkWinLose() {
+    if (state.gameOver) return;
+    if (state.enemy.hp <= 0) {
+        state.gameOver = true;
+        showOverlay('¡GANASTE! 🎉');
+        log('¡Victoria!');
+        disableAll();
+        reportGameResult('win');
+    } else if (state.player.hp <= 0) {
+        state.gameOver = true;
+        showOverlay('DERROTA');
+        log('Has sido derrotado...');
+        disableAll();
+        reportGameResult('lose');
+    }
+}

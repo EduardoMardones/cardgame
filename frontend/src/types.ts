@@ -247,6 +247,7 @@ export interface User {
   email: string;
   is_active: boolean;
   is_admin: boolean;
+  packs_available: number;
   created_at: string;
 }
 

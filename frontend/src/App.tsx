@@ -7,6 +7,8 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DeckListPage from "./pages/DeckListPage";
 import DeckBuilderPage from "./pages/DeckBuilderPage";
+import DeckSelectPage from "./pages/DeckSelectPage";
+
 
 
 // Wrapper que protege rutas: si no hay sesión redirige a /login.
@@ -31,9 +33,10 @@ function AppRoutes() {
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
       <Route path="/"         element={<PrivateRoute><MainMenuPage /></PrivateRoute>} />
       <Route path="/editor"   element={<PrivateRoute><EditorPage /></PrivateRoute>} />
-      <Route path="/juego" element={<PrivateRoute><GamePage /></PrivateRoute>} />
       <Route path="/mazos" element={<PrivateRoute><DeckListPage /></PrivateRoute>} />
       <Route path="/mazos/:deckId" element={<PrivateRoute><DeckBuilderPage /></PrivateRoute>} />
+      <Route path="/juego" element={<PrivateRoute><DeckSelectPage /></PrivateRoute>} />
+      <Route path="/juego/:deckId" element={<PrivateRoute><GamePage /></PrivateRoute>} />
     </Routes>
   );
 }

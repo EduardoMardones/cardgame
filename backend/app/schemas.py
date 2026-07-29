@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -247,3 +247,14 @@ class DeckCreate(BaseModel):
 class DeckUpdate(BaseModel):
     name: str = Field(..., min_length=1, max_length=60)
     cards: list[DeckCardInput] = Field(default_factory=list)
+
+# --- Resultado de partida vs IA ---
+
+class GameResultRequest(BaseModel):
+    deck_id: uuid.UUID
+    result: Literal["win", "lose"]
+
+
+class GameResultResponse(BaseModel):
+    packs_available: int
+    pack_awarded: bool

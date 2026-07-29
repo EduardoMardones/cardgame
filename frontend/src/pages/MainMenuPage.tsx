@@ -1,18 +1,22 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import OpenPackModal from "../components/OpenPackModal";
 
 export default function MainMenuPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const navigate = useNavigate();
+  const [showPackModal, setShowPackModal] = useState(false);
 
   function handleLogout() {
     logout();
     navigate("/login");
   }
 
+  const packs = user?.packs_available ?? 0;
+
   return (
     <div style={styles.wrap}>
-      {/* Saludo + logout en la esquina */}
       <div style={styles.topBar}>
         <span style={styles.welcome}>👋 {user?.username ?? "Invitado"}</span>
         <button style={styles.logoutBtn} onClick={handleLogout}>Cerrar sesión</button>
@@ -20,11 +24,25 @@ export default function MainMenuPage() {
 
       <h1 style={styles.title}>Card Creator</h1>
       <p style={styles.subtitle}>Tu juego de cartas personalizado</p>
+
+      {packs > 0 && (
+        <button style={styles.packBtn} onClick={() => setShowPackModal(true)}>
+          🎁 Abrir sobre ({packs} disponible{packs > 1 ? "s" : ""})
+        </button>
+      )}
+
       <div style={styles.buttons}>
         <Link to="/editor" style={styles.button}>Crear cartas</Link>
         <Link to="/juego" style={{ ...styles.button, ...styles.buttonPrimary }}>Jugar</Link>
         <Link to="/mazos" style={styles.button}>Mis mazos</Link>
       </div>
+
+      {showPackModal && (
+        <OpenPackModal
+          onClose={() => setShowPackModal(false)}
+          onOpened={refreshUser}
+        />
+      )}
     </div>
   );
 }
@@ -48,7 +66,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "Georgia, serif",
   },
   title: { fontSize: "3rem", margin: 0, textShadow: "0 2px 8px rgba(0,0,0,0.6)", letterSpacing: "2px" },
-  subtitle: { color: "#ddd", marginBottom: "40px", fontSize: "1rem" },
+  subtitle: { color: "#ddd", marginBottom: "16px", fontSize: "1rem" },
+  packBtn: {
+    marginBottom: "24px", padding: "10px 20px", border: "2px solid #f3d430", borderRadius: "8px",
+    background: "#3a2c1c", color: "#f3d430", fontWeight: "bold", cursor: "pointer",
+    boxShadow: "0 0 12px rgba(243,212,48,0.4)", fontFamily: "Georgia, serif",
+  },
   buttons: { display: "flex", gap: "24px" },
   button: {
     padding: "16px 36px", border: "3px solid #c3a05b", borderRadius: "8px",
