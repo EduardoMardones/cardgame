@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import Base, engine
-from .routers import cards, catalog, auth, collection  # <-- agregar auth
+from .routers import cards, catalog, auth, collection, decks  # <-- agregar auth
 
 # Crea las tablas si no existen (para un proyecto más grande, usar Alembic en vez de esto)
 Base.metadata.create_all(bind=engine)
@@ -29,6 +29,7 @@ app.include_router(cards.router)
 app.include_router(catalog.router)
 app.include_router(auth.router)  # <-- agregar auth
 app.include_router(collection.router)
+app.include_router(decks.router)
 
 @app.get("/health")
 def health():

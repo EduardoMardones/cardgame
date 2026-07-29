@@ -1,9 +1,9 @@
 import uuid
 from typing import Optional
-
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .models import CardType, Keyword, Battlecry, Deathrattle, SpellEffect
+from .models import CardType, Keyword, Battlecry, Deathrattle, SpellEffect, DeckMode
 
 
 # Lista finita de triggers soportada por el Event Bus del frontend
@@ -198,3 +198,52 @@ class ClaimOriginRequest(BaseModel):
 class OpenPackResult(BaseModel):
     cards: list[CardOut]
     packs_remaining: int
+
+class DeckCardOut(BaseModel):
+    card_id: uuid.UUID
+    quantity: int
+    card: CardOut
+
+    class Config:
+        from_attributes = True
+
+
+class DeckOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    mode: DeckMode
+    created_at: datetime
+    updated_at: datetime
+    cards: list[DeckCardOut] = []
+
+    class Config:
+        from_attributes = True
+
+
+class DeckOutSummary(BaseModel):
+    """Para listar mazos sin cargar todas las cartas."""
+    id: uuid.UUID
+    name: str
+    mode: DeckMode
+    created_at: datetime
+    updated_at: datetime
+    card_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class DeckCardInput(BaseModel):
+    card_id: uuid.UUID
+    quantity: int = Field(..., ge=1, le=2)
+
+
+class DeckCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=60)
+    mode: DeckMode = DeckMode.free
+    cards: list[DeckCardInput] = Field(default_factory=list)
+
+
+class DeckUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=60)
+    cards: list[DeckCardInput] = Field(default_factory=list)

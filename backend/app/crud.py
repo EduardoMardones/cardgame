@@ -141,3 +141,85 @@ def open_pack(db: Session, user: models.User, pack_size: int = 5):
     user.packs_available -= 1
     db.commit()
     return chosen, user.packs_available
+
+# --- Mazos ---
+
+MAX_CARDS_PER_DECK = 30
+MAX_COPIES_PER_CARD = 2
+
+
+def get_user_decks(db: Session, user_id: uuid.UUID):
+    return db.query(models.Deck).filter(models.Deck.user_id == user_id).all()
+
+
+def get_deck(db: Session, deck_id: uuid.UUID):
+    return db.query(models.Deck).filter(models.Deck.id == deck_id).first()
+
+
+def create_deck(db: Session, user: models.User, data: schemas.DeckCreate):
+    _validate_deck_cards(db, user, data.mode, data.cards)
+
+    deck = models.Deck(user_id=user.id, name=data.name, mode=data.mode)
+    db.add(deck)
+    db.flush()  # obtenemos deck.id sin commitear
+
+    for item in data.cards:
+        db.add(models.DeckCard(deck_id=deck.id, card_id=item.card_id, quantity=item.quantity))
+
+    db.commit()
+    db.refresh(deck)
+    return deck
+
+
+def update_deck(db: Session, user: models.User, deck: models.Deck, data: schemas.DeckUpdate):
+    _validate_deck_cards(db, user, deck.mode, data.cards)
+
+    deck.name = data.name
+
+    # Reemplazar cartas: borrar las existentes y reinsertar
+    db.query(models.DeckCard).filter(models.DeckCard.deck_id == deck.id).delete()
+    for item in data.cards:
+        db.add(models.DeckCard(deck_id=deck.id, card_id=item.card_id, quantity=item.quantity))
+
+    db.commit()
+    db.refresh(deck)
+    return deck
+
+
+def delete_deck(db: Session, deck: models.Deck):
+    db.delete(deck)
+    db.commit()
+
+
+def _validate_deck_cards(
+    db: Session,
+    user: models.User,
+    mode: models.DeckMode,
+    cards: list[schemas.DeckCardInput],
+):
+    """Valida reglas de negocio del mazo. Lanza ValueError si algo no cumple."""
+    total = sum(item.quantity for item in cards)
+    if total > MAX_CARDS_PER_DECK:
+        raise ValueError(f"El mazo no puede tener más de {MAX_CARDS_PER_DECK} cartas (tiene {total})")
+
+    for item in cards:
+        if item.quantity > MAX_COPIES_PER_CARD:
+            raise ValueError(f"No puedes tener más de {MAX_COPIES_PER_CARD} copias de la misma carta")
+
+    if mode == models.DeckMode.normal:
+        # En modo normal, todas las cartas deben estar en la colección del usuario
+        collection_map = {
+            uc.card_id: uc.quantity
+            for uc in db.query(models.UserCollection)
+            .filter(models.UserCollection.user_id == user.id)
+            .all()
+        }
+        for item in cards:
+            owned = collection_map.get(item.card_id, 0)
+            if item.quantity > owned:
+                card = db.query(models.Card).filter(models.Card.id == item.card_id).first()
+                name = card.name if card else str(item.card_id)
+                raise ValueError(
+                    f"No tienes suficientes copias de '{name}' "
+                    f"(necesitas {item.quantity}, tienes {owned})"
+                )

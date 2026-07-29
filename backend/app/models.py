@@ -136,7 +136,7 @@ class User(Base):
     packs_available = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     collection = relationship("UserCollection", back_populates="user")
-
+    decks = relationship("Deck", back_populates="user")
 
 # --- Colección ---
 
@@ -163,3 +163,37 @@ class ClaimLog(Base):
     claimed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (UniqueConstraint("user_id", "origin_id", name="uq_user_origin_claim"),)
+
+# --- Mazos ---
+
+class DeckMode(str, enum.Enum):
+    free = "free"
+    normal = "normal"
+
+
+class Deck(Base):
+    __tablename__ = "decks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(60), nullable=False)
+    mode = Column(Enum(DeckMode), nullable=False, default=DeckMode.free)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="decks")
+    cards = relationship("DeckCard", back_populates="deck", cascade="all, delete-orphan")
+
+
+class DeckCard(Base):
+    __tablename__ = "deck_cards"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    deck_id = Column(UUID(as_uuid=True), ForeignKey("decks.id", ondelete="CASCADE"), nullable=False)
+    card_id = Column(UUID(as_uuid=True), ForeignKey("cards.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Integer, default=1, nullable=False)
+
+    deck = relationship("Deck", back_populates="cards")
+    card = relationship("Card")
+
+    __table_args__ = (UniqueConstraint("deck_id", "card_id", name="uq_deck_card"),)
