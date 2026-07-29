@@ -23,6 +23,7 @@ export default function MainMenuPage() {
       <div style={styles.buttons}>
         <Link to="/editor" style={styles.button}>Crear cartas</Link>
         <Link to="/juego" style={{ ...styles.button, ...styles.buttonPrimary }}>Jugar</Link>
+        <Link to="/mazos" style={styles.button}>Mis mazos</Link>
       </div>
     </div>
   );

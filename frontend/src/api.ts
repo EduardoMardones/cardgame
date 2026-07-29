@@ -118,3 +118,79 @@ export async function getArchetypes(): Promise<string[]> {
 export async function getTeams(): Promise<string[]> {
   return (await listTeams()).map((e) => e.name);
 }
+
+import type {
+  Deck, DeckSummary, DeckCardInput, DeckMode, CollectionEntry,
+} from "./types";
+
+function authJsonHeaders(): Record<string, string> {
+  return { "Content-Type": "application/json", ...getAuthHeader() };
+}
+
+async function handleJson<T>(res: Response, fallbackMsg: string): Promise<T> {
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ? String(err.detail) : fallbackMsg);
+  }
+  return res.json();
+}
+
+// --- Colección ---
+export async function fetchMyCollection(): Promise<CollectionEntry[]> {
+  const res = await fetch(`${BASE_URL}/collection/me`, { headers: getAuthHeader() });
+  return handleJson(res, "Error al cargar tu colección");
+}
+
+export async function claimOrigin(originId: string) {
+  const res = await fetch(`${BASE_URL}/collection/me/claim`, {
+    method: "POST",
+    headers: authJsonHeaders(),
+    body: JSON.stringify({ origin_id: originId }),
+  });
+  return handleJson(res, "Error al reclamar el origen");
+}
+
+export async function openPack() {
+  const res = await fetch(`${BASE_URL}/collection/me/open-pack`, {
+    method: "POST",
+    headers: getAuthHeader(),
+  });
+  return handleJson<{ cards: unknown[]; packs_remaining: number }>(res, "Error al abrir el sobre");
+}
+
+// --- Mazos ---
+export async function fetchMyDecks(): Promise<DeckSummary[]> {
+  const res = await fetch(`${BASE_URL}/decks/`, { headers: getAuthHeader() });
+  return handleJson(res, "Error al cargar tus mazos");
+}
+
+export async function fetchDeck(id: string): Promise<Deck> {
+  const res = await fetch(`${BASE_URL}/decks/${id}`, { headers: getAuthHeader() });
+  return handleJson(res, "Error al cargar el mazo");
+}
+
+export async function createDeck(name: string, mode: DeckMode, cards: DeckCardInput[]): Promise<Deck> {
+  const res = await fetch(`${BASE_URL}/decks/`, {
+    method: "POST",
+    headers: authJsonHeaders(),
+    body: JSON.stringify({ name, mode, cards }),
+  });
+  return handleJson(res, "Error al crear el mazo");
+}
+
+export async function updateDeck(id: string, name: string, cards: DeckCardInput[]): Promise<Deck> {
+  const res = await fetch(`${BASE_URL}/decks/${id}`, {
+    method: "PUT",
+    headers: authJsonHeaders(),
+    body: JSON.stringify({ name, cards }),
+  });
+  return handleJson(res, "Error al guardar el mazo");
+}
+
+export async function deleteDeck(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/decks/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeader(),
+  });
+  if (!res.ok) throw new Error("Error al borrar el mazo");
+}

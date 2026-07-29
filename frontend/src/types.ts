@@ -254,3 +254,41 @@ export interface Token {
   access_token: string;
   token_type: string;
 }
+
+// --- Colección y Mazos ---
+export type DeckMode = "free" | "normal";
+
+export interface DeckCardEntry {
+  card_id: string;
+  quantity: number;
+  card: CardData;
+}
+
+export interface Deck {
+  id: string;
+  name: string;
+  mode: DeckMode;
+  created_at: string;
+  updated_at: string;
+  cards: DeckCardEntry[];
+}
+
+export interface DeckSummary {
+  id: string;
+  name: string;
+  mode: DeckMode;
+  created_at: string;
+  updated_at: string;
+  card_count: number;
+}
+
+export interface DeckCardInput {
+  card_id: string;
+  quantity: number;
+}
+
+export interface CollectionEntry {
+  card_id: string;
+  quantity: number;
+  card: CardData;
+}
