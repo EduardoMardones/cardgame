@@ -18,8 +18,11 @@ VALID_TRIGGERS = {
 # Efectos que el motor del juego (game.html) sabe ejecutar hoy. Si agregás
 # un handler nuevo con abilitySystem.registerEffect(...) en game.html,
 # sumalo acá también para poder guardarlo desde el editor de cartas.
-VALID_EFFECTS = {"DEAL_DAMAGE", "HEAL", "DRAW_CARD", "RETURN_TO_HAND", "GIVE_CHARGE"}
-
+VALID_EFFECTS = {
+    "DEAL_DAMAGE", "HEAL", "DRAW_CARD", "RETURN_TO_HAND", "GIVE_CHARGE",
+    "TUTOR_FROM_DECK", "FORCE_DISCARD", "STEAL_CARD", "SUMMON_TOKEN",
+    "REVIVE_FROM_GRAVEYARD", "DISCOVER",
+}
 
 class Ability(BaseModel):
     trigger: str

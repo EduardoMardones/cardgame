@@ -33,7 +33,6 @@ export interface Ability {
   params?: Record<string, unknown>;
 }
 
-// --- Catálogo del editor visual de habilidades ---
 // Fuente única para el builder de CardForm.tsx: qué triggers y effects se
 // pueden elegir, y qué parámetros pide cada effect. Si agregás un effect
 // nuevo acá, también tenés que:
@@ -160,6 +159,50 @@ export const EFFECT_CATALOG: Record<Effect, EffectDef> = {
     description: "El esbirro puede atacar el mismo turno en que entra al campo.",
     params: [],
   },
+
+  TUTOR_FROM_DECK: {
+    label: "Grito de Guerra (buscar en mazo)",
+    description: "Busca en tu mazo un esbirro del mismo origen que esta carta y lo agrega a tu mano.",
+    params: [],
+  },
+  FORCE_DISCARD: {
+    label: "Ver y descartar",
+    description: "Mira la mano del rival y le descarta una carta a elección.",
+    params: [],
+  },
+  STEAL_CARD: {
+    label: "Robar carta del rival",
+    description: "Roba una carta al azar del mazo del oponente y la agrega a tu mano.",
+    params: [],
+  },
+  SUMMON_TOKEN: {
+    label: "Invocar token",
+    description: "Invoca un esbirro predefinido (no existe en la BD) en tu campo.",
+    params: [
+      {
+        key: "token", label: "Token a invocar", kind: "select", default: "vampiro_passione",
+        options: [{ value: "vampiro_passione", label: "Vampiro de Passione (2/1)" }],
+      },
+    ],
+  },
+  REVIVE_FROM_GRAVEYARD: {
+    label: "Invocar desde el cementerio",
+    description: "Elige un esbirro de un cementerio y lo invoca en tu campo con sus stats originales.",
+    params: [
+      {
+        key: "source", label: "Cementerio", kind: "select", default: "OWN_GRAVEYARD",
+        options: [
+          { value: "OWN_GRAVEYARD", label: "Tu cementerio" },
+          { value: "ENEMY_GRAVEYARD", label: "Cementerio rival" },
+        ],
+      },
+    ],
+  },
+  DISCOVER: {
+    label: "Descubrir",
+    description: "Muestra 3 cartas al azar del catálogo global; elegí una para agregar a tu mano.",
+    params: [],
+  },
 };
 
 // Arma una habilidad nueva con los valores por defecto de un effect dado.
@@ -229,7 +272,6 @@ export const emptyCard: CardData = {
   flavor_text: "",
 };
 
-// --- Catálogos administrables: Orígenes, Arquetipos, Equipos ---
 // Son listas simples (solo nombre) que se gestionan aparte de las cartas,
 // como "empleados" (cartas) vs. "áreas de trabajo" (estos catálogos).
 // `icon` queda reservado para el futuro (ej. un ícono SVG o emoji por
@@ -240,7 +282,6 @@ export interface CatalogEntry {
   icon?: string | null;
 }
 
-// --- Auth ---
 export interface User {
   id: string;
   username: string;
@@ -256,7 +297,6 @@ export interface Token {
   token_type: string;
 }
 
-// --- Colección y Mazos ---
 export type DeckMode = "free" | "normal";
 
 export interface DeckCardEntry {

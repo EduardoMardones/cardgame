@@ -461,5 +461,75 @@
         background: rgba(0,0,0,0.7); z-index: 600; font-size: 1.4rem; text-align: center;
     }
 
-
-==>> ARCHIVO: /home/eduardo/.Workspace/card-creator/frontend/public/game/game.html
+    .selection-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.75);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+    }
+    .selection-modal-box {
+        background: #1e1510;
+        border: 2px solid #c3a05b;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 640px;
+        font-family: Georgia, serif;
+        color: #f3e8c0;
+    }
+    .selection-modal-title {
+        font-size: 1.2rem;
+        color: #f3d430;
+        margin-bottom: 16px;
+        text-align: center;
+    }
+    .selection-modal-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .selection-modal-card {
+        width: 100px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 8px;
+        border: 2px solid #6b5730;
+        border-radius: 8px;
+        background: #2c241e;
+        transition: border-color 0.15s, transform 0.15s;
+    }
+    .selection-modal-card:hover {
+        border-color: #f3d430;
+        transform: translateY(-4px);
+    }
+    .selection-modal-art {
+        width: 84px;
+        height: 100px;
+        background-size: cover;
+        background-position: center;
+        background-color: #443322;
+        border-radius: 4px;
+    }
+    .selection-modal-name {
+        font-size: 11px;
+        text-align: center;
+    }
+    #selection-modal-cancel {
+        display: block;
+        margin: 16px auto 0;
+        background: transparent;
+        border: 1px solid #6b5730;
+        color: #ccc;
+        padding: 6px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: Georgia, serif;
+    }

@@ -1,9 +1,13 @@
+
 // --- Config de conexión y parámetros de la URL (Paso 6.2) ---
 const API_BASE = 'http://localhost:8000';
 
 const urlParams = new URLSearchParams(window.location.search);
 const DECK_ID = urlParams.get('deckId');   // mazo elegido en DeckSelectPage
 const AUTH_TOKEN = urlParams.get('token'); // JWT del usuario logueado
+
+// Variable global para el efecto DISCOVER
+let ALL_CATALOG_CARDS = [];
 
 function authHeaders() {
     return AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {};
@@ -17,6 +21,14 @@ const CONFIG = {
     MAX_HAND_SIZE: 10,   // cartas máximas en mano
     MAX_MINIONS: 7,      // esbirros máximos en el campo por jugador
     MAX_MANA: 10,        // maná máximo alcanzable
+};
+
+// Tokens: esbirros que no existen en la BD (Paso 6.5, habilidad 4).
+const TOKENS = {
+    vampiro_passione: {
+        type: 'minion', name: 'Vampiro de Passione', mana: 1, atk: 2, hp: 1,
+        keyword: 'none', isToken: true, abilities: [],
+    },
 };
 
 class EventBus {
@@ -45,10 +57,13 @@ class AbilitySystem {
     registerEffect(effectName, handlerFn) {
         this.effectHandlers[effectName] = handlerFn;
     }
+    // DESPUÉS
     registerCard(cardId, abilities, extraContext) {
         const listeners = [];
         (abilities || []).forEach(ability => {
             const callback = (context) => {
+                // Solo reaccionar si el evento es de ESTA carta específica
+                if (context.minionEl && context.minionEl.id !== cardId) return;
                 const handler = this.effectHandlers[ability.effect];
                 if (handler) handler(ability.params || {}, { ...context, ...extraContext });
             };
@@ -57,6 +72,7 @@ class AbilitySystem {
         });
         this.cardListeners.set(cardId, listeners);
     }
+
     unregisterCard(cardId) {
         const listeners = this.cardListeners.get(cardId) || [];
         listeners.forEach(({ trigger, callback }) => this.eventBus.off(trigger, callback));
@@ -200,6 +216,109 @@ abilitySystem.registerEffect('GIVE_CHARGE', (params, context) => {
     if (context.minionEl) context.minionEl.classList.remove('exhausted');
 });
 
+// 1. Grito de guerra: busca en tu mazo un esbirro del mismo origen y lo agrega a la mano.
+abilitySystem.registerEffect('TUTOR_FROM_DECK', (params, context) => {
+    const side = context.owner;
+    const activatingOrigin = context.minionEl ? context.minionEl.dataset.origin : '';
+    const pool = state[side].deckCards.filter(c => c.type === 'minion' && c.origin === activatingOrigin && activatingOrigin);
+
+    if (!pool.length) {
+        log(`${side === 'player' ? 'No hay' : 'El rival no tiene'} esbirros de ese origen en el mazo.`);
+        return;
+    }
+    const chosen = pick(pool);
+    state[side].deckCards = state[side].deckCards.filter(c => c !== chosen);
+    if (addCardToHand(side, { ...chosen })) {
+        log(`${side === 'player' ? 'Buscaste' : 'El rival busca'} a "${chosen.name}" en el mazo.`);
+    }
+});
+
+// 2. Ver y descartar: mira la mano del rival y le descarta una carta a elección.
+abilitySystem.registerEffect('FORCE_DISCARD', (params, context) => {
+    const enemySide = context.enemySide;
+
+    if (enemySide === 'enemy') {
+        if (!state.enemy.hand.length) { log('La mano del rival está vacía.'); return; }
+        showSelectionModal('Elegí una carta para descartarle al rival', state.enemy.hand, (_, index) => {
+            discardFromHand('enemy', index);
+        }, { allowCancel: false });
+    } else {
+        const handCards = Array.from(document.getElementById('player-hand').children);
+        if (!handCards.length) { log('Tu mano está vacía.'); return; }
+        discardFromHand('player', pick(handCards));
+    }
+});
+
+// 3. Robar carta del rival: saca una carta al azar del mazo enemigo a tu mano.
+abilitySystem.registerEffect('STEAL_CARD', (params, context) => {
+    const side = context.owner;
+    const enemySide = context.enemySide;
+    const rivalDeck = state[enemySide].deckCards;
+    if (!rivalDeck.length) {
+        log(`${enemySide === 'player' ? 'Tu mazo' : 'El mazo rival'} no tiene cartas.`);
+        return;
+    }
+    const idx = Math.floor(Math.random() * rivalDeck.length);
+    const [stolen] = rivalDeck.splice(idx, 1);
+    if (addCardToHand(side, { ...stolen })) {
+        log(`${side === 'player' ? 'Robaste' : 'El rival roba'} una carta del mazo rival.`);
+    }
+});
+
+// 4. Invocar token: coloca un esbirro hardcodeado en el campo del dueño.
+abilitySystem.registerEffect('SUMMON_TOKEN', (params, context) => {
+    const tokenData = TOKENS[params.token];
+    if (!tokenData) { console.warn('Token desconocido:', params.token); return; }
+    const minion = summonMinionOnField(context.owner, { ...tokenData });
+    if (minion) log(`${context.owner === 'player' ? 'Invocaste' : 'El rival invoca'} a "${tokenData.name}".`);
+});
+
+// 5. Invocar desde el cementerio: elige un esbirro del cementerio (propio o rival) y lo invoca.
+abilitySystem.registerEffect('REVIVE_FROM_GRAVEYARD', (params, context) => {
+    const side = context.owner;
+    const sourceSide = params.source === 'ENEMY_GRAVEYARD' ? context.enemySide : side;
+    const pool = state[sourceSide].graveyard.filter(c => c.type === 'minion');
+
+    if (!pool.length) {
+        log(`${sourceSide === side ? 'Tu' : 'El'} cementerio no tiene esbirros para invocar.`);
+        return;
+    }
+
+    if (side !== 'player') {
+        // La IA elige al azar sin mostrar modal.
+        const chosen = pick(pool);
+        state[sourceSide].graveyard = state[sourceSide].graveyard.filter(c => c !== chosen);
+        summonMinionOnField(side, { ...chosen });
+        log('El rival invoca un esbirro desde el cementerio.');
+        return;
+    }
+
+    showSelectionModal('Elegí un esbirro para invocar desde el cementerio', pool, (chosen) => {
+        state[sourceSide].graveyard = state[sourceSide].graveyard.filter(c => c !== chosen);
+        summonMinionOnField(side, { ...chosen });
+        log(`Invocaste a "${chosen.name}" desde el cementerio.`);
+    });
+});
+
+// 6. Descubrir: muestra 3 cartas al azar del catálogo y agrega la elegida a la mano.
+abilitySystem.registerEffect('DISCOVER', (params, context) => {
+    const side = context.owner;
+    const pool = ALL_CATALOG_CARDS.length ? ALL_CATALOG_CARDS : [generateCardData(), generateCardData(), generateCardData()];
+    const options = shuffle(pool.slice()).slice(0, 3).map(c => ({ ...c }));
+
+    if (!options.length) { log('No hay cartas disponibles para descubrir.'); return; }
+
+    if (side !== 'player') {
+        const chosen = pick(options);
+        if (addCardToHand(side, chosen)) log('El rival descubre una carta.');
+        return;
+    }
+
+    showSelectionModal('Descubrí una carta', options, (chosen) => {
+        if (addCardToHand(side, chosen)) log(`Descubriste a "${chosen.name || 'una carta'}".`);
+    });
+});
+
 function applyReturnToHand(chosen, context) {
     chosen.forEach(m => returnMinionToHand(m));
     if (chosen.length) {
@@ -327,7 +446,9 @@ async function loadPlayerDeck() {
     if (deckCards.length > CONFIG.DECK_SIZE) {
         deckCards = deckCards.slice(0, CONFIG.DECK_SIZE);
     }
-
+    console.log('DEBUG deckMode:', state.deckMode);
+    console.log('DEBUG cartas reales en el mazo:', deckCards.filter(c => c.fromDb));
+    console.log('DEBUG total cartas:', deckCards.length);
     state.player.deckCards = shuffle(deckCards);
 }
 
@@ -348,10 +469,11 @@ const state = {
     activePlayer: 'player',
     gameOver: false,
     selectedAttacker: null,
-  pendingAbility: null,
-  deckMode: 'free',
-    player: { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, deckCards: [] },
-    enemy:  { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, hand: [] }
+    pendingAbility: null,
+    deckMode: 'free',
+
+    player: { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, deckCards: [], graveyard: [] },
+    enemy:  { maxMana: 1, mana: 1, deck: CONFIG.DECK_SIZE, hp: CONFIG.STARTING_HP, heroPowerUsed: false, minionCount: 0, handCount: 0, hand: [], deckCards: [], graveyard: [] }
 };
 
 function log(msg) {
@@ -373,6 +495,34 @@ function showOverlay(text) {
     const ov = document.getElementById('overlay-msg');
     ov.textContent = text;
     ov.style.display = 'flex';
+}
+
+function showSelectionModal(title, cardsData, onPick, { allowCancel = true } = {}) {
+    const modal = document.getElementById('selection-modal');
+    const grid = document.getElementById('selection-modal-grid');
+    document.getElementById('selection-modal-title').textContent = title;
+    grid.innerHTML = '';
+
+    cardsData.forEach((data, index) => {
+        const el = document.createElement('div');
+        el.className = 'selection-modal-card';
+        el.innerHTML = `
+            <div class="selection-modal-art" style="background-image:url('${resolveImg(data.image)}')"></div>
+            <div class="selection-modal-name">${data.name || (data.type === 'spell' ? 'Hechizo' : 'Esbirro')}</div>
+        `;
+        el.addEventListener('click', () => {
+            hideSelectionModal();
+            onPick(data, index);
+        });
+        grid.appendChild(el);
+    });
+
+    document.getElementById('selection-modal-cancel').style.display = allowCancel ? 'block' : 'none';
+    modal.style.display = 'flex';
+}
+
+function hideSelectionModal() {
+    document.getElementById('selection-modal').style.display = 'none';
 }
 
 const KEYWORDS = ['none', 'none', 'none', 'taunt', 'charge', 'lifesteal'];
@@ -496,6 +646,37 @@ function addCardToHand(side, data) {
     return true;
 }
 
+
+function discardFromHand(side, indexOrElement) {
+    if (side === 'enemy') {
+        const [data] = state.enemy.hand.splice(indexOrElement, 1);
+        state.enemy.handCount--;
+        const backEl = document.getElementById('back-' + data.id);
+        if (backEl) backEl.remove();
+        refreshEnemyHandFan();
+        if (!data.isToken) state.enemy.graveyard.push(data);
+        log('Le descartaste una carta al rival.');
+    } else {
+        const cardEl = indexOrElement; // acá se pasa el elemento DOM directamente
+        state.player.handCount--;
+        const isToken = cardEl.dataset.isToken === '1';
+        if (!isToken) {
+            state.player.graveyard.push({
+                type: cardEl.dataset.type, name: cardEl.dataset.name, image: cardEl.dataset.image,
+                mana: parseInt(cardEl.dataset.mana || '0'),
+                atk: parseInt(cardEl.dataset.atk || '0'), hp: parseInt(cardEl.dataset.hp || '0'),
+                keyword: cardEl.dataset.keyword || 'none',
+                abilities: JSON.parse(cardEl.dataset.abilities || '[]'),
+                origin: cardEl.dataset.origin || '',
+            });
+        }
+        cardEl.remove();
+        log('El rival te descartó una carta.');
+    }
+    refreshPlayability();
+}
+
+
 function renderPlayerHandCard(data) {
     const hand = document.getElementById('player-hand');
     const card = document.createElement('div');
@@ -508,6 +689,7 @@ function renderPlayerHandCard(data) {
     card.dataset.origin = data.origin || '';
     card.dataset.archetypes = JSON.stringify(data.archetypes || []);
     card.dataset.teams = JSON.stringify(data.teams || []);
+    card.dataset.isToken = data.isToken ? '1' : '0';
 
     const artInner = data.image
         ? `<div class="card-art-img" style="background-image: url('${data.image}'); background-position: ${data.imagePosX ?? 50}% ${data.imagePosY ?? 50}%; transform: scale(${(data.imageScale ?? 100) / 100}); transform-origin: ${data.imagePosX ?? 50}% ${data.imagePosY ?? 50}%;"></div>`
@@ -752,6 +934,7 @@ function playCardFromElement(cardElement, side) {
     minion.dataset.origin = cardElement.dataset.origin || '';
     minion.dataset.archetypes = cardElement.dataset.archetypes || '[]';
     minion.dataset.teams = cardElement.dataset.teams || '[]';
+    minion.dataset.isToken = cardElement.dataset.isToken || '0';
 
     const artInner = cardElement.dataset.image
         ? `<div class="minion-art-img" style="background-image: url('${cardElement.dataset.image}'); background-position: ${cardElement.dataset.imagePosX || 50}% ${cardElement.dataset.imagePosY || 50}%; transform: scale(${(cardElement.dataset.imageScale || 100) / 100}); transform-origin: ${cardElement.dataset.imagePosX || 50}% ${cardElement.dataset.imagePosY || 50}%;"></div>`
@@ -794,6 +977,87 @@ function playCardFromElement(cardElement, side) {
     renderManaBar();
     return true;
 }
+
+// Coloca un esbirro directamente en el campo a partir de un objeto de datos
+// (no de un elemento de mano). Usado por SUMMON_TOKEN y REVIVE_FROM_GRAVEYARD.
+function summonMinionOnField(side, data) {
+    const p = state[side];
+    if (p.minionCount >= CONFIG.MAX_MINIONS) {
+        log(`El campo está lleno (máximo ${CONFIG.MAX_MINIONS}).`);
+        return null;
+    }
+    p.minionCount++;
+
+    const battlefieldId = side === 'player' ? 'player-minions' : 'enemy-minions';
+    const battlefield = document.getElementById(battlefieldId);
+
+    const keyword = data.keyword || 'none';
+    const charge = keyword === 'charge';
+
+    const minion = document.createElement('div');
+    minion.className = 'minion-in-play' + (charge ? '' : ' exhausted') + (keyword === 'taunt' ? ' taunt' : '');
+    minion.id = side + '-minion-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    minion.dataset.side = side;
+    minion.dataset.atk = data.atk;
+    minion.dataset.hp = data.hp;
+    minion.dataset.maxhp = data.hp;
+    minion.dataset.baseatk = data.atk;
+    minion.dataset.mana = data.mana || 0;
+    minion.dataset.name = data.name || '';
+
+    minion.dataset.image = data.image || '';
+    minion.dataset.imagePosX = data.imagePosX ?? 50;
+    minion.dataset.imagePosY = data.imagePosY ?? 50;
+    minion.dataset.imageScale = data.imageScale ?? 100;
+
+    minion.dataset.keyword = keyword;
+    minion.dataset.deathrattle = data.deathrattle || '';
+    const abilities = data.abilities || [];
+    minion.dataset.abilities = JSON.stringify(abilities);
+
+    minion.dataset.flavor = data.flavor || '';
+    minion.dataset.origin = data.origin || '';
+    minion.dataset.archetypes = JSON.stringify(data.archetypes || []);
+    minion.dataset.teams = JSON.stringify(data.teams || []);
+    minion.dataset.isToken = data.isToken ? '1' : '0';
+
+    const artInner = data.image
+        ? `<div class="minion-art-img" style="background-image: url('${resolveImg(data.image)}'); background-position: ${data.imagePosX ?? 50}% ${data.imagePosY ?? 50}%; transform: scale(${(data.imageScale ?? 100) / 100}); transform-origin: ${data.imagePosX ?? 50}% ${data.imagePosY ?? 50}%;"></div>`
+        : '';
+
+    const kwTag = keyword !== 'none' ? `<div class="keyword-tag k-${keyword}">${keywordLabel(keyword)}</div>` : '';
+    const archetypes = data.archetypes || [];
+    const teams = data.teams || [];
+    const originChip = data.origin ? `<span class="chip origin">${data.origin}</span>` : '';
+    const archetypeChips = archetypes.map(a => `<span class="chip">${archetypeIconSvg(a)}${a}</span>`).join('');
+    const teamChips = teams.map(a => `<span class="chip">${teamIconSvg(a)}${a}</span>`).join('');
+    const abilitiesFullText = describeAbilities(abilities);
+
+    minion.innerHTML = `
+        <div class="minion-art">${artInner}</div>
+        ${kwTag}
+        <div class="atk-value">${data.atk}</div>
+        <div class="hp-value">${data.hp}</div>
+        <div class="expanded-panel minion-panel">
+            <div class="exp-name">${data.name || 'Esbirro'}</div>
+            ${abilitiesFullText ? `<div class="exp-ability">${abilitiesFullText}</div>` : ''}
+            ${(originChip || archetypeChips || teamChips) ? `<div class="exp-chips">${originChip}${archetypeChips}${teamChips}</div>` : ''}
+            ${data.flavor ? `<div class="exp-flavor">"${data.flavor}"</div>` : ''}
+        </div>
+    `;
+
+    if (side === 'player') minion.onclick = () => onPlayerMinionClick(minion);
+    else minion.onclick = () => onEnemyMinionClick(minion);
+
+    battlefield.appendChild(minion);
+
+    const enemySide = side === 'player' ? 'enemy' : 'player';
+    abilitySystem.registerCard(minion.id, abilities, {});
+    eventBus.emit('ON_ENTER', { owner: side, enemySide, minionEl: minion });
+
+    return minion;
+}
+
 
 function castSpell(effect, value, side) {
     const enemySide = side === 'player' ? 'enemy' : 'player';
@@ -1000,6 +1264,26 @@ function spawnDeathParticles(minionEl) {
 // COMBATE — versiones con animaciones
 // ============================================================
 
+function minionToCardData(minionEl) {
+    return {
+        type: 'minion',
+        mana: parseInt(minionEl.dataset.mana || '0'),
+        atk: parseInt(minionEl.dataset.baseatk ?? minionEl.dataset.atk),
+        hp: parseInt(minionEl.dataset.maxhp),
+        keyword: minionEl.dataset.keyword || 'none',
+        name: minionEl.dataset.name || '',
+        image: minionEl.dataset.image || '',
+        imagePosX: parseInt(minionEl.dataset.imagePosX || 50),
+        imagePosY: parseInt(minionEl.dataset.imagePosY || 50),
+        imageScale: parseInt(minionEl.dataset.imageScale || 100),
+        abilities: JSON.parse(minionEl.dataset.abilities || '[]'),
+        origin: minionEl.dataset.origin || '',
+        archetypes: JSON.parse(minionEl.dataset.archetypes || '[]'),
+        teams: JSON.parse(minionEl.dataset.teams || '[]'),
+        isToken: minionEl.dataset.isToken === '1',
+    };
+}
+
 function killMinion(minionEl) {
     const side = minionEl.dataset.side;
     state[side].minionCount--;
@@ -1010,10 +1294,12 @@ function killMinion(minionEl) {
 
     if (state.selectedAttacker === minionEl.id) clearSelection();
 
-    // Disparamos las partículas antes de que empiece la animación de muerte
-    spawnDeathParticles(minionEl);
+    // Los tokens no van al cementerio: desaparecen sin dejar rastro (regla del plan).
+    if (minionEl.dataset.isToken !== '1') {
+        state[side].graveyard.push(minionToCardData(minionEl));
+    }
 
-    // Reemplazamos la clase dying original con la nueva animación
+    spawnDeathParticles(minionEl);
     minionEl.classList.add('dying');
     setTimeout(() => {
         if (document.body.contains(minionEl)) minionEl.remove();
@@ -1029,19 +1315,7 @@ function returnMinionToHand(minionEl) {
     abilitySystem.unregisterCard(minionEl.id);
     state[side].minionCount--;
 
-    const data = {
-        type: 'minion',
-        mana: parseInt(minionEl.dataset.mana || '0'),
-        atk: parseInt(minionEl.dataset.baseatk ?? minionEl.dataset.atk),
-        hp: parseInt(minionEl.dataset.maxhp),
-        keyword: minionEl.dataset.keyword || 'none',
-        name: minionEl.dataset.name || '',
-        image: minionEl.dataset.image || '',
-        imagePosX: parseInt(minionEl.dataset.imagePosX || 50),
-        imagePosY: parseInt(minionEl.dataset.imagePosY || 50),
-        imageScale: parseInt(minionEl.dataset.imageScale || 100),
-        abilities: JSON.parse(minionEl.dataset.abilities || '[]'),
-    };
+    const data = minionToCardData(minionEl);
 
     if (state.selectedAttacker === minionEl.id) clearSelection();
     minionEl.remove();
@@ -1257,8 +1531,19 @@ function resolveMinionCombat(attackerEl, defenderEl) {
 
 function checkWinLose() {
     if (state.gameOver) return;
-    if (state.enemy.hp <= 0) { state.gameOver = true; showOverlay('¡GANASTE! 🎉'); log('¡Victoria!'); disableAll(); }
-    else if (state.player.hp <= 0) { state.gameOver = true; showOverlay('DERROTA'); log('Has sido derrotado...'); disableAll(); }
+    if (state.enemy.hp <= 0) {
+        state.gameOver = true;
+        showOverlay('¡GANASTE! 🎉');
+        log('¡Victoria!');
+        disableAll();
+        reportGameResult('win');
+    } else if (state.player.hp <= 0) {
+        state.gameOver = true;
+        showOverlay('DERROTA');
+        log('Has sido derrotado...');
+        disableAll();
+        reportGameResult('lose');
+    }
 }
 
 function disableAll() {
@@ -1424,6 +1709,7 @@ function aiAttackPhase() {
     renderInitialStats();
     renderManaBar();
     document.getElementById('end-turn').disabled = false;
+    ALL_CATALOG_CARDS = await fetchCatalogCards();
     await Promise.all([loadPlayerDeck(), loadEnemyDeck()]);
     document.getElementById('loading-msg').style.display = 'none';
     for (let i = 0; i < 3; i++) setTimeout(() => drawCard('player'), i * 200);
@@ -1445,22 +1731,5 @@ async function reportGameResult(result) {
         }
     } catch (err) {
         console.warn('No se pudo reportar el resultado de la partida.', err);
-    }
-}
-
-function checkWinLose() {
-    if (state.gameOver) return;
-    if (state.enemy.hp <= 0) {
-        state.gameOver = true;
-        showOverlay('¡GANASTE! 🎉');
-        log('¡Victoria!');
-        disableAll();
-        reportGameResult('win');
-    } else if (state.player.hp <= 0) {
-        state.gameOver = true;
-        showOverlay('DERROTA');
-        log('Has sido derrotado...');
-        disableAll();
-        reportGameResult('lose');
     }
 }

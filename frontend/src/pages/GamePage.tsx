@@ -1,10 +1,20 @@
+import { useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export default function GamePage() {
+  const { deckId } = useParams<{ deckId: string }>();
+  const { token } = useAuth();
+
+  const src = deckId
+    ? `/game/game.html?deckId=${deckId}&token=${encodeURIComponent(token ?? "")}`
+    : `/game/game.html`;
+
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>      <Link to="/" style={backButtonStyle}>← Menú</Link>
+    <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
+      <Link to="/" style={backButtonStyle}>← Menú</Link>
       <iframe
-        src="/game/game.html"
+        src={src}
         style={{ border: "none", width: "100%", height: "100%", display: "block" }}
         title="Juego de cartas"
       />

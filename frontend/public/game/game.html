@@ -52,6 +52,14 @@
     <div id="deck" onclick="drawCard('player')">MAZO<br><span id="deck-count"></span></div>
 </div>
 
+<div id="selection-modal" class="selection-modal-overlay">
+    <div class="selection-modal-box">
+        <div id="selection-modal-title" class="selection-modal-title"></div>
+        <div id="selection-modal-grid" class="selection-modal-grid"></div>
+        <button id="selection-modal-cancel" onclick="hideSelectionModal()">Cancelar</button>
+    </div>
+</div>
+
 <script src="game.js"></script>
 </body>
 </html>
