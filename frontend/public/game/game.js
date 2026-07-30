@@ -212,10 +212,41 @@ abilitySystem.registerEffect('DRAW_CARD', (params, context) => {
     log(`${side === 'player' ? 'Robaste' : 'El rival roba'} ${amount} carta(s) por una habilidad.`);
 });
 
+// DESPUÉS
 abilitySystem.registerEffect('GIVE_CHARGE', (params, context) => {
-    if (context.minionEl) context.minionEl.classList.remove('exhausted');
-});
+    const side = context.owner;
 
+    if (side !== 'player') {
+        // La IA elige al azar entre sus esbirros exhaustos (excluyendo el que activó la habilidad)
+        const candidates = targetResolver.resolveMinionPool('OWN_MINIONS', context)
+            .filter(m => m.classList.contains('exhausted'));
+        const target = candidates.length ? pick(candidates) : null;
+        if (target) {
+            target.classList.remove('exhausted');
+            log(`El rival le da Carga a "${target.dataset.name}".`);
+        } else {
+            log('El rival no tiene esbirros exhaustos para dar Carga.');
+        }
+        return;
+    }
+
+    const pool = targetResolver.resolveMinionPool('OWN_MINIONS', context)
+        .filter(m => m.classList.contains('exhausted'));
+
+    if (!pool.length) {
+        log('No tenés esbirros exhaustos a los que dar Carga.');
+        return;
+    }
+
+    requestManualTarget('CHOOSE_OWN_MINIONS', context, (target) => {
+        if (!target.classList.contains('exhausted')) {
+            log('Ese esbirro ya puede atacar.');
+            return;
+        }
+        target.classList.remove('exhausted');
+        log(`Le diste Carga a "${target.dataset.name}".`);
+    });
+});
 // 1. Grito de guerra: busca en tu mazo un esbirro del mismo origen y lo agrega a la mano.
 abilitySystem.registerEffect('TUTOR_FROM_DECK', (params, context) => {
     const side = context.owner;
@@ -842,8 +873,7 @@ function describeEffect(effect, params = {}) {
             return amount > 1 ? `${who ? "El rival roba" : "Roba"} ${amount} cartas.` : `${who ? "El rival roba" : "Roba"} 1 carta.`;
         }
         case "GIVE_CHARGE":
-            return "Puede atacar de inmediato.";
-        case "RETURN_TO_HAND": {
+          return "Grito de guerra: elige uno de tus esbirros en el campo y puede atacar de inmediato.";        case "RETURN_TO_HAND": {
             const amount = params.amount || 1;
             if (params.target === "ALL_MINIONS") {
                 return `Devuelve ${TARGET_LABELS[params.target]} a la mano.`;
@@ -855,6 +885,27 @@ function describeEffect(effect, params = {}) {
             const targetLabel = TARGET_LABELS[params.target || "ENEMY_MINIONS"] || "";
             return `Devuelve ${amount} esbirro(s) ${targetLabel.replace("a los ", "de los ").replace("a ", "de ")} a la mano.`;
         }
+        case "TUTOR_FROM_DECK":
+            return "Busca en tu mazo un esbirro del mismo origen y lo agrega a tu mano.";
+        case "FORCE_DISCARD":
+            return "Mira la mano del rival y descartá una carta a elección.";
+        case "STEAL_CARD":
+            return "Roba una carta al azar del mazo del rival y agrégala a tu mano.";
+        case "SUMMON_TOKEN": {
+            const tokenNames = {
+                vampiro_passione: "Vampiro de Passione (2/1)"
+            };
+            const tokenName = tokenNames[params.token] || params.token || "un token";
+            return `Invoca a ${tokenName} en tu campo.`;
+        }
+        case "REVIVE_FROM_GRAVEYARD": {
+            const source = params.source === "ENEMY_GRAVEYARD"
+                ? "el cementerio rival"
+                : "tu cementerio";
+            return `Elige un esbirro de ${source} e invócalo en tu campo.`;
+        }
+        case "DISCOVER":
+            return "Descubrí: elige 1 de 3 cartas al azar del catálogo y agrégala a tu mano.";
         default:
             return "";
     }
